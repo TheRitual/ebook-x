@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/TheRitual/ebook-x/compare/v1.1.0...v1.2.0) (2026-02-17)
+
+### Features
+
+- Add JSON and HTML output formats for EPUB extraction ([7aff811](https://github.com/TheRitual/ebook-x/commit/7aff8118e1d29f91e84cc1133f7955feba7dcf84))
+- release 1.0.0 ([1802f56](https://github.com/TheRitual/ebook-x/commit/1802f568ef9072d92d829a5966fb4c038e7c9011))
+
 # [1.1.0](https://github.com/TheRitual/epub-x/compare/v1.0.0...v1.1.0) (2026-02-17)
 
 ### Features
