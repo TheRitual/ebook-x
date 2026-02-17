@@ -1,3 +1,9 @@
+## [1.2.4](https://github.com/TheRitual/ebook-x/compare/v1.2.3...v1.2.4) (2026-02-17)
+
+### Bug Fixes
+
+- Correct version syntax in nfpm.yaml for variable interpolation and update AppImage download link in build-release-assets workflow ([6b42567](https://github.com/TheRitual/ebook-x/commit/6b425679d8985fcf6e72eb2579b9a78d6119f83c))
+
 ## [1.2.3](https://github.com/TheRitual/ebook-x/compare/v1.2.2...v1.2.3) (2026-02-17)
 
 ### Bug Fixes
