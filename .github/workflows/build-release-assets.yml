@@ -134,7 +134,7 @@ jobs:
           chmod +x AppDir/usr/bin/ebook-x
           printf '[Desktop Entry]\nType=Application\nName=ebook-x\nExec=ebook-x %%F\nCategories=Utility;\n' > AppDir/ebook-x.desktop
           ln -s usr/bin/ebook-x AppDir/AppRun
-          curl -sSfL https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage -o appimagetool
+          curl -sSfL https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -o appimagetool
           chmod +x appimagetool
           ARCH=x86_64 ./appimagetool AppDir "ebook-x-${version}-x86_64.AppImage"
       - uses: actions/upload-artifact@v4
