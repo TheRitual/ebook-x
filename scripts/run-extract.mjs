@@ -1,8 +1,5 @@
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.resolve(__dirname, "..");
+import * as lib from "../dist/lib.js";
 
 function parseArgs(argv) {
   const format = argv[0];
@@ -56,8 +53,6 @@ async function main() {
     flatOutput: opts.flatOutput === true,
     includeImages: opts.includeImages === true,
   };
-  const libPath = path.join(projectRoot, "dist", "lib.js");
-  const lib = await import(libPath);
   const fn = lib[`eXepub2${format}`];
   if (!fn) {
     console.error(`Unknown format: ${format}`);

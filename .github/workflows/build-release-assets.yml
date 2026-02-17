@@ -1,17 +1,33 @@
 name: Build release assets
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+    branches: [main]
 
 jobs:
+  resolve-tag:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.get_tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git fetch origin refs/tags/*:refs/tags/*
+      - id: get_tag
+        run: echo "tag=$(git tag -l --sort=-v:refname | head -1)" >> $GITHUB_OUTPUT
+
   validate:
     name: Lint and test
+    needs: [resolve-tag]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ needs.resolve-tag.outputs.tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: "lts/*"
@@ -24,11 +40,11 @@ jobs:
   build-windows:
     name: Windows x64
     runs-on: windows-latest
-    needs: [validate]
+    needs: [resolve-tag, validate]
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ needs.resolve-tag.outputs.tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: "lts/*"
@@ -37,7 +53,7 @@ jobs:
       - run: npm run build
       - run: npx pkg . -t node20-win-x64 -o ebook-x
       - run: |
-          $version = "${{ github.event.release.tag_name }}".TrimStart('v')
+          $version = "${{ needs.resolve-tag.outputs.tag }}".TrimStart('v')
           Move-Item -Path ebook-x-win-x64.exe -Destination "ebook-x-$version-win-x64.exe"
       - uses: actions/upload-artifact@v4
         with:
@@ -47,11 +63,11 @@ jobs:
   build-macos:
     name: macOS
     runs-on: macos-latest
-    needs: [validate]
+    needs: [resolve-tag, validate]
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ needs.resolve-tag.outputs.tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: "lts/*"
@@ -60,7 +76,7 @@ jobs:
       - run: npm run build
       - run: npx pkg . -t node20-macos-x64,node20-macos-arm64 -o ebook-x
       - run: |
-          version="${{ github.event.release.tag_name }}"
+          version="${{ needs.resolve-tag.outputs.tag }}"
           version="${version#v}"
           mv ebook-x-macos-x64 "ebook-x-${version}-darwin-x64"
           mv ebook-x-macos-arm64 "ebook-x-${version}-darwin-arm64"
@@ -74,11 +90,11 @@ jobs:
   build-linux:
     name: Linux
     runs-on: ubuntu-latest
-    needs: [validate]
+    needs: [resolve-tag, validate]
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ needs.resolve-tag.outputs.tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: "lts/*"
@@ -87,7 +103,7 @@ jobs:
       - run: npm run build
       - run: npx pkg . -t node20-linux-x64 -o ebook-x
       - run: |
-          version="${{ github.event.release.tag_name }}"
+          version="${{ needs.resolve-tag.outputs.tag }}"
           version="${version#v}"
           mv ebook-x-linux-x64 "ebook-x-${version}-linux-x64"
           chmod +x "ebook-x-${version}-linux-x64"
@@ -97,7 +113,7 @@ jobs:
           sudo dpkg -i nfpm.deb
       - name: Create deb and rpm
         run: |
-          version="${{ github.event.release.tag_name }}"
+          version="${{ needs.resolve-tag.outputs.tag }}"
           version="${version#v}"
           mkdir -p pkg/usr/bin
           cp "ebook-x-${version}-linux-x64" pkg/usr/bin/ebook-x
@@ -106,7 +122,7 @@ jobs:
           nfpm pkg -f nfpm.yaml -t "ebook-x-${version}.x86_64.rpm" -p rpm
       - name: Build AppImage
         run: |
-          version="${{ github.event.release.tag_name }}"
+          version="${{ needs.resolve-tag.outputs.tag }}"
           version="${version#v}"
           mkdir -p AppDir/usr/bin
           cp "ebook-x-${version}-linux-x64" AppDir/usr/bin/ebook-x
@@ -128,7 +144,7 @@ jobs:
   upload-release:
     name: Upload to release
     runs-on: ubuntu-latest
-    needs: [build-windows, build-macos, build-linux]
+    needs: [resolve-tag, build-windows, build-macos, build-linux]
     permissions:
       contents: write
     steps:
@@ -140,7 +156,7 @@ jobs:
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ needs.resolve-tag.outputs.tag }}
           files: artifacts/*
           draft: false
         env:
