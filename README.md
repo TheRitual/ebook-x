@@ -1,6 +1,6 @@
 # epub-x
 
-Interactive Node.js CLI to extract book text from EPUB files to plain text (`.txt`) or Markdown (`.md`). Output is written to an `output/` directory with optional chapter titles, table of contents, and image extraction for Markdown.
+Interactive Node.js CLI to extract book text from EPUB files to **plain text** (`.txt`), **Markdown** (`.md`), **JSON** (`.json`), or **HTML** (`.html`). Output is written to an `output/` directory with optional chapter titles, table of contents, and image extraction (MD/HTML).
 
 **Requirements:** Node.js ≥ 20.
 
@@ -10,7 +10,7 @@ Interactive Node.js CLI to extract book text from EPUB files to plain text (`.tx
 
 1. **Main menu** – Convert an EPUB file, open Settings, or exit.
 2. **File browser** – Navigate directories, go to parent (`..`), select an EPUB. Press **Esc** to cancel, **Ctrl/Cmd+S** to open Settings.
-3. **Output format** – Plain text (`.txt`) or Markdown (`.md`) (default from settings).
+3. **Output format** – Plain text (`.txt`), Markdown (`.md`), JSON (`.json`), or HTML (`.html`) (default from settings).
 4. **Output file name** – Base name without extension (default: source filename without extension).
 5. If the output book directory already exists, you are asked whether to remove and recreate it.
 6. Conversion runs using your saved settings; progress and output directory are shown.
@@ -18,6 +18,7 @@ Interactive Node.js CLI to extract book text from EPUB files to plain text (`.tx
    - **General:** Output path (directory browser), default format, split chapters, chapter file name style, em dash, sanitize whitespace, multiple newlines, keep TOC, restore defaults.
    - **TXT only:** Add chapter titles, chapter title style.
    - **MD only:** Include images, create TOC for MD files, create index file with TOC for chapters, add back link to chapters (when split + index TOC are on).
+   - **HTML only:** HTML style – keep original (epub-like) or use custom theme (default: papyrus-like background, dark brown text, Lato/Roboto/Arial).
    - On a setting row, press **Space** to cycle the value (e.g. Yes ↔ No); **Enter** to confirm and return to the list. Stored in the system config directory (Linux: `~/.config/epub-x`, macOS: `~/Library/Application Support/epub-x`, Windows: `%LOCALAPPDATA%\\epub-x`).
 
 **Output structure:** Each book is written under a directory named after the output basename. The main file is inside that directory. Example for basename `book` with images and split chapters (MD):
@@ -89,6 +90,8 @@ npm run build && npm run run
 - **Split chapters:** When on, each chapter is written to `<book-dir>/chapters/` with file names from the “Chapter file name” setting (same as output e.g. `book-chapter-42`, `chapter` e.g. `chapter-42`, or custom prefix).
 - **Index TOC (MD):** When split chapters and “Create index file with TOC for chapters” are on, the main file is an index with links to each chapter file. “Add back link to chapters” adds a link back to the index in each chapter file.
 - **TOC:** “Keep table of contents” uses the EPUB’s TOC at the start of the single file (when not splitting).
+- **JSON output:** One `.json` file per book with `version`, `metadata`, `toc`, `chapters`, and `images`. Chapters have prefixed ids (`chap_<uuid>`), TOC entries reference chapters by `chapterId`, and optional images use `img_<uuid>` with placeholders `{{img_<uuid>}}` in content. See [docs/json-output-format.md](docs/json-output-format.md) for the format specification.
+- **HTML output:** Preserves formatting; optional custom theme (background, text, heading and body fonts). “Keep original” uses minimal wrapper for epub-like appearance.
 
 ---
 

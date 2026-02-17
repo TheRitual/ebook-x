@@ -32,8 +32,24 @@ export function loadSettings(): AppSettings {
 
   try {
     const content = fs.readFileSync(settingsPath, "utf-8");
-    const parsed = JSON.parse(content) as Partial<AppSettings>;
-    return { ...DEFAULT_SETTINGS, ...parsed };
+    const parsed = JSON.parse(content) as Partial<AppSettings> & {
+      defaultFormat?: AppSettings["defaultFormats"][number];
+      htmlUseOriginalStyle?: boolean;
+    };
+    const result: AppSettings = { ...DEFAULT_SETTINGS, ...parsed };
+    if (parsed.htmlUseOriginalStyle !== undefined && !("htmlStyle" in parsed)) {
+      result.htmlStyle = parsed.htmlUseOriginalStyle ? "none" : "custom";
+    }
+    if (
+      !Array.isArray(result.defaultFormats) ||
+      result.defaultFormats.length === 0
+    ) {
+      result.defaultFormats =
+        typeof parsed.defaultFormat === "string"
+          ? [parsed.defaultFormat]
+          : DEFAULT_SETTINGS.defaultFormats;
+    }
+    return result;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

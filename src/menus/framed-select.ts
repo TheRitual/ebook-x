@@ -1,7 +1,7 @@
 import readline from "node:readline";
 import process from "node:process";
 import { exitNicely } from "../exit.js";
-import { theme, styleMessage, styleHint } from "./colors.js";
+import { styleMessage, styleHintTips, styleSelectedRow } from "./colors.js";
 import {
   clearScreen,
   getFrameWidth,
@@ -9,6 +9,7 @@ import {
   frameBottom,
   frameLine,
   getSelectPageSize,
+  PAGE_JUMP,
 } from "./utils.js";
 
 export interface FramedChoice {
@@ -41,12 +42,10 @@ export function drawFramedChoiceList(
       const isSelected = globalIndex === selectedIndex;
       const bullet = isSelected ? "▸ " : "  ";
       const content = bullet + choice.name;
-      return isSelected
-        ? theme.selectedBg + theme.selected + content + theme.reset
-        : content;
+      return isSelected ? styleSelectedRow(content) : content;
     }),
     "",
-    styleHint(hint),
+    styleHintTips(hint),
   ];
   clearScreen();
   process.stdout.write(frameTop(width) + "\n");
@@ -78,6 +77,12 @@ export function promptFramedSelect(
       render();
     };
 
+    const moveByPage = (delta: number): void => {
+      const next = Math.max(0, Math.min(index + delta, choices.length - 1));
+      index = next;
+      render();
+    };
+
     const onKeypress = (
       _ch: unknown,
       key?: { name?: string; ctrl?: boolean }
@@ -96,6 +101,24 @@ export function promptFramedSelect(
       }
       if (key?.name === "down" || key?.name === "j") {
         move(1);
+        return;
+      }
+      if (key?.name === "pageup") {
+        moveByPage(-PAGE_JUMP);
+        return;
+      }
+      if (key?.name === "pagedown") {
+        moveByPage(PAGE_JUMP);
+        return;
+      }
+      if (key?.name === "home") {
+        index = 0;
+        render();
+        return;
+      }
+      if (key?.name === "end") {
+        index = Math.max(0, choices.length - 1);
+        render();
         return;
       }
       if (key?.name === "return" || key?.name === "enter") {
@@ -159,6 +182,12 @@ export function promptFramedSelectLoop<T>(
       render();
     };
 
+    const moveByPage = (delta: number): void => {
+      const next = Math.max(0, Math.min(index + delta, choices.length - 1));
+      index = next;
+      render();
+    };
+
     const onKeypress = (
       _ch: unknown,
       key?: { name?: string; ctrl?: boolean; meta?: boolean }
@@ -191,6 +220,24 @@ export function promptFramedSelectLoop<T>(
       }
       if (key?.name === "down" || key?.name === "j") {
         move(1);
+        return;
+      }
+      if (key?.name === "pageup") {
+        moveByPage(-PAGE_JUMP);
+        return;
+      }
+      if (key?.name === "pagedown") {
+        moveByPage(PAGE_JUMP);
+        return;
+      }
+      if (key?.name === "home") {
+        index = 0;
+        render();
+        return;
+      }
+      if (key?.name === "end") {
+        index = Math.max(0, choices.length - 1);
+        render();
         return;
       }
       if (key?.name === "return" || key?.name === "enter") {

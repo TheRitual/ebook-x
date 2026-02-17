@@ -105,10 +105,20 @@ export function applyPostOptions(
 
 const EXTRACTION_FOOTER_URL = "https://jsr.io/@ritual/ebook-x/";
 
-export function getExtractionFooter(format: "txt" | "md"): string {
+export function getExtractionFooter(format: "txt" | "md" | "html"): string {
   const sep = "\n\n---\n\n";
   if (format === "md") {
     return `${sep}*Extracted with [ebook-x](${EXTRACTION_FOOTER_URL}).*`;
   }
+  if (format === "html") {
+    return `${sep}<p><em>Extracted with <a href="${EXTRACTION_FOOTER_URL}">ebook-x</a>.</em></p>`;
+  }
   return `${sep}Extracted with ebook-x. ${EXTRACTION_FOOTER_URL}`;
+}
+
+export function extractBodyInnerHtml(html: string): string {
+  const bodyMatch = /<body[^>]*>([\s\S]*?)<\/body>/i.exec(html);
+  if (bodyMatch) return bodyMatch[1]!.trim();
+  const withoutHead = html.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, "");
+  return withoutHead.trim();
 }

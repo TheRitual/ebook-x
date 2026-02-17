@@ -3,6 +3,8 @@ import process from "node:process";
 const MIN_PAGE_SIZE = 10;
 const RESERVE_ROWS = 6;
 
+export const PAGE_JUMP = 10;
+
 export function clearScreen(): void {
   process.stdout.write("\x1b[2J\x1b[H");
 }

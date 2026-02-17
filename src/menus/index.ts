@@ -17,24 +17,40 @@ export async function promptMainMenu(): Promise<MainMenuAction> {
       { name: "Settings", value: "settings" },
       { name: "Exit", value: "exit" },
     ],
-    FRAMED_HINT
+    " ↑/↓ move  Enter select  Esc exit"
   );
   return (value ?? "exit") as MainMenuAction;
+}
+
+function outputFormatDefaultIndex(f: OutputFormat): number {
+  switch (f) {
+    case "txt":
+      return 0;
+    case "md":
+      return 1;
+    case "json":
+      return 2;
+    case "html":
+      return 3;
+    default:
+      return 0;
+  }
 }
 
 export async function promptOutputFormat(
   defaultFormat: OutputFormat
 ): Promise<OutputFormat> {
   clearScreen();
-  const defaultIndex = defaultFormat === "md" ? 1 : 0;
   const value = await promptFramedSelect(
     "Output format",
     [
       { name: "Plain text (.txt)", value: "txt" },
       { name: "Markdown (.md)", value: "md" },
+      { name: "JSON (.json)", value: "json" },
+      { name: "HTML (.html)", value: "html" },
     ],
     FRAMED_HINT,
-    defaultIndex
+    outputFormatDefaultIndex(defaultFormat)
   );
   return (value ?? "txt") as OutputFormat;
 }
@@ -90,6 +106,20 @@ export async function promptSuccessScreen(
     0,
     buildSuccessContentLines(result)
   );
+}
+
+export async function promptChangeSettingsBeforeConverting(): Promise<boolean> {
+  clearScreen();
+  const value = await promptFramedSelect(
+    "Change settings before converting?",
+    [
+      { name: "No, use current settings", value: "no" },
+      { name: "Yes, open settings", value: "yes" },
+    ],
+    " ↑/↓ move  Enter select  Esc back",
+    0
+  );
+  return value === "yes";
 }
 
 export async function promptOutputFilename(

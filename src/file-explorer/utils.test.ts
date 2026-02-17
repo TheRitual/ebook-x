@@ -34,7 +34,7 @@ describe("listEntries", () => {
     try {
       fs.writeFileSync(path.join(dir, "a.epub"), "");
       fs.writeFileSync(path.join(dir, "b.txt"), "");
-      fs.mkdirSync(path.join(dir, "subdir"));
+      fs.mkdirSync(path.join(dir, "subdir"), { recursive: true });
       const entries = listEntries(dir);
       const names = entries.map((e) => e.name);
       expect(names).toContain("subdir/");

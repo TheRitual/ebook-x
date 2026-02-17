@@ -137,4 +137,61 @@ describe.skipIf(!testBookExists())("example book (books/testbook.epub)", () => {
     const content = fs.readFileSync(result.outputPath, "utf-8");
     expect(content).toMatch(/Table of contents/);
   });
+
+  it("converts to json with metadata and chapters with UUIDs", async () => {
+    const outDir = resolveOutputDir("");
+    const result = await convertEpub(
+      TEST_BOOK_PATH,
+      TEST_OUTPUT_BASENAME,
+      "json",
+      defaultConvertOptions,
+      outDir
+    );
+    expect(result.outputPath).toMatch(/\.json$/);
+    expect(fs.existsSync(result.outputPath)).toBe(true);
+    const raw = fs.readFileSync(result.outputPath, "utf-8");
+    const data = JSON.parse(raw) as {
+      version: string;
+      metadata: Record<string, string>;
+      toc: unknown[];
+      chapters: { id: string; index: number; title: string; content: string }[];
+    };
+    expect(data.version).toBe("1.0");
+    expect(data.metadata).toBeDefined();
+    expect(Array.isArray(data.chapters)).toBe(true);
+    expect(data.chapters.length).toBeGreaterThan(0);
+    const ch = data.chapters[0]!;
+    expect(ch.id).toMatch(
+      /^chap_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    );
+    expect(ch.index).toBe(1);
+    expect(typeof ch.content).toBe("string");
+  });
+
+  it("converts to html and writes full document", async () => {
+    const options = {
+      ...defaultConvertOptions,
+      htmlStyle: "none" as const,
+      htmlTheme: {
+        background: "#f4f0e6",
+        text: "#2c1810",
+        headingColor: "#2c1810",
+        headingFont: "Lato, sans-serif",
+        bodyFont: "Lato, sans-serif",
+      },
+    };
+    const outDir = resolveOutputDir("");
+    const result = await convertEpub(
+      TEST_BOOK_PATH,
+      TEST_OUTPUT_BASENAME,
+      "html",
+      options,
+      outDir
+    );
+    expect(result.outputPath).toMatch(/\.html$/);
+    expect(fs.existsSync(result.outputPath)).toBe(true);
+    const content = fs.readFileSync(result.outputPath, "utf-8");
+    expect(content).toMatch(/<!DOCTYPE html>/i);
+    expect(content).toContain("<body>");
+  });
 });

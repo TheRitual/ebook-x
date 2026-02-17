@@ -2,13 +2,16 @@ import readline from "node:readline";
 import process from "node:process";
 import { exitNicely } from "../exit.js";
 import type { AppSettings } from "./types.js";
+import type { HtmlStyle } from "./types.js";
 import type { SettingKey } from "./menu.js";
+import { getSettingDescription } from "./menu.js";
 import {
-  theme,
   styleMessage,
   styleHint,
+  styleHintTips,
   styleSettingValue,
   styleSectionBold,
+  styleSelectedRow,
 } from "../menus/colors.js";
 import {
   getSelectPageSize,
@@ -17,15 +20,38 @@ import {
   frameTop,
   frameBottom,
   frameLine,
+  PAGE_JUMP,
 } from "../menus/utils.js";
 
 export type SettingsRow = { name: string; value: string; disabled?: boolean };
 
+const HTML_STYLE_ORDER: HtmlStyle[] = ["none", "styled", "custom"];
+const DESCRIPTION_LINES = 4;
+
+function wrapDescription(text: string, width: number): string[] {
+  const lines: string[] = [];
+  const words = text.split(/\s+/);
+  let line = "";
+  for (const word of words) {
+    const next = line ? line + " " + word : word;
+    if (next.length <= width) {
+      line = next;
+    } else {
+      if (line) lines.push(line);
+      line = word.length <= width ? word : word.slice(0, width);
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
 function cycleSettingForward(key: SettingKey, settings: AppSettings): void {
   switch (key) {
-    case "defaultFormat":
-      settings.defaultFormat = settings.defaultFormat === "txt" ? "md" : "txt";
+    case "htmlStyle": {
+      const i = HTML_STYLE_ORDER.indexOf(settings.htmlStyle);
+      settings.htmlStyle = HTML_STYLE_ORDER[(i + 1) % HTML_STYLE_ORDER.length];
       break;
+    }
     case "addChapterTitles":
       settings.addChapterTitles = !settings.addChapterTitles;
       break;
@@ -81,9 +107,14 @@ function cycleSettingForward(key: SettingKey, settings: AppSettings): void {
 
 function cycleSettingBackward(key: SettingKey, settings: AppSettings): void {
   switch (key) {
-    case "defaultFormat":
-      settings.defaultFormat = settings.defaultFormat === "txt" ? "md" : "txt";
+    case "htmlStyle": {
+      const i = HTML_STYLE_ORDER.indexOf(settings.htmlStyle);
+      settings.htmlStyle =
+        HTML_STYLE_ORDER[
+          (i - 1 + HTML_STYLE_ORDER.length) % HTML_STYLE_ORDER.length
+        ];
       break;
+    }
     case "addChapterTitles":
       settings.addChapterTitles = !settings.addChapterTitles;
       break;
@@ -143,7 +174,7 @@ export function cycleSetting(key: SettingKey, settings: AppSettings): void {
 
 export function isCycleable(value: string): boolean {
   const cycleable: string[] = [
-    "defaultFormat",
+    "htmlStyle",
     "addChapterTitles",
     "chapterTitleStyleTxt",
     "emDashToHyphen",
@@ -164,6 +195,7 @@ export type SettingsListAction =
   | { type: "done" }
   | { type: "cancel" }
   | { type: "openOutputPath" }
+  | { type: "openDefaultFormats" }
   | { type: "openCustomPrefix" }
   | { type: "restoreDefaults" }
   | { type: "none" };
@@ -207,19 +239,20 @@ function formatSettingsRow(
   isSelected: boolean,
   isSep: boolean
 ): string {
-  const prefix = isSelected ? theme.selectedBg : "";
-  const suffix = isSelected ? theme.reset : "";
   const bullet = isSelected ? "▸ " : "  ";
 
   if (isSep) {
-    return prefix + bullet + formatSectionTitle(row) + suffix;
+    return isSelected
+      ? styleSelectedRow(bullet + formatSectionTitle(row))
+      : bullet + formatSectionTitle(row);
   }
   const idx = row.name.indexOf(": ");
   const labelPart = idx === -1 ? row.name : row.name.slice(0, idx + 2);
   const valuePart = idx === -1 ? "" : row.name.slice(idx + 2);
   const paddedLabel = labelPart.padEnd(valueColumn);
-  const content = paddedLabel + styleSettingValue(valuePart);
-  return prefix + bullet + content + suffix;
+  const content =
+    paddedLabel + (isSelected ? valuePart : styleSettingValue(valuePart));
+  return isSelected ? styleSelectedRow(bullet + content) : bullet + content;
 }
 
 export function promptSettingsList(
@@ -227,7 +260,7 @@ export function promptSettingsList(
   getRows: () => SettingsRow[]
 ): Promise<SettingsListAction> {
   return new Promise((resolve) => {
-    const pageSize = getSelectPageSize();
+    const pageSize = Math.max(5, getSelectPageSize() - DESCRIPTION_LINES - 2);
     let rows = getRows();
     let index = 0;
     while (index < rows.length && rows[index]?.disabled) index++;
@@ -239,10 +272,19 @@ export function promptSettingsList(
       const start = visibleStart(index, rows, pageSize);
       const visible = rows.slice(start, start + pageSize);
       const message = styleMessage("Settings (Esc to return to main menu)");
-      const hint = styleHint(
-        " ↑/↓ move  Space/Tab cycle  Shift+Tab cycle back  Enter select  Esc back"
+      const hint = styleHintTips(
+        " ↑/↓ move  Space/Tab cycle  Shift+Tab cycle back  Enter select  R restore defaults  Esc back"
       );
       const width = getFrameWidth();
+      const selectedRow = rows[index];
+      const descriptionText = selectedRow
+        ? getSettingDescription(selectedRow.value, settings)
+        : "";
+      const descriptionWrapped = wrapDescription(
+        descriptionText,
+        Math.max(20, width - 4)
+      ).slice(0, DESCRIPTION_LINES);
+      const descriptionLines = descriptionWrapped.map((l) => styleHint(l));
       const lines: string[] = [
         message,
         "",
@@ -252,11 +294,14 @@ export function promptSettingsList(
           const isSep =
             row.value === "__sep__" ||
             row.value === "__sep2__" ||
-            row.value === "__sep3__";
+            row.value === "__sep3__" ||
+            row.value === "__sep4__" ||
+            row.value === "__sep5__";
           return formatSettingsRow(row, valueColumn, isSelected, isSep);
         }),
         "",
         hint,
+        ...(descriptionLines.length > 0 ? ["", ...descriptionLines] : []),
       ];
       clearScreen();
       process.stdout.write(frameTop(width) + "\n");
@@ -276,6 +321,40 @@ export function promptSettingsList(
         if (next >= rows.length) next = 0;
       }
       if (next >= 0 && next < rows.length) index = next;
+      render();
+    };
+
+    const findNextBy = (from: number, delta: number, steps: number): number => {
+      let next = from;
+      for (let i = 0; i < steps; i++) {
+        next += delta;
+        if (next < 0) next = rows.length - 1;
+        if (next >= rows.length) next = 0;
+        while (next >= 0 && next < rows.length && rows[next]?.disabled) {
+          next += delta;
+          if (next < 0) next = rows.length - 1;
+          if (next >= rows.length) next = 0;
+        }
+      }
+      return next;
+    };
+
+    const moveByPage = (delta: number): void => {
+      index = findNextBy(index, delta, PAGE_JUMP);
+      render();
+    };
+
+    const goHome = (): void => {
+      let i = 0;
+      while (i < rows.length && rows[i]?.disabled) i++;
+      if (i < rows.length) index = i;
+      render();
+    };
+
+    const goEnd = (): void => {
+      let i = rows.length - 1;
+      while (i >= 0 && rows[i]?.disabled) i--;
+      if (i >= 0) index = i;
       render();
     };
 
@@ -308,6 +387,27 @@ export function promptSettingsList(
         move(1);
         return;
       }
+      if (key?.name === "pageup") {
+        moveByPage(-1);
+        return;
+      }
+      if (key?.name === "pagedown") {
+        moveByPage(1);
+        return;
+      }
+      if (key?.name === "home") {
+        goHome();
+        return;
+      }
+      if (key?.name === "end") {
+        goEnd();
+        return;
+      }
+      if (key?.name === "r" && !key?.ctrl && !key?.shift) {
+        cleanup();
+        resolve({ type: "restoreDefaults" });
+        return;
+      }
       const row = rows[index];
       if (!row) return;
 
@@ -326,13 +426,14 @@ export function promptSettingsList(
           resolve({ type: "done" });
           return;
         }
-        if (row.value === "__restore__") {
-          resolve({ type: "restoreDefaults" });
-          return;
-        }
         if (row.value === "outputPath") {
           cleanup();
           resolve({ type: "openOutputPath" });
+          return;
+        }
+        if (row.value === "defaultFormats") {
+          cleanup();
+          resolve({ type: "openDefaultFormats" });
           return;
         }
         if (row.value === "chapterFileNameCustomPrefix") {

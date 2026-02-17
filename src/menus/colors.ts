@@ -8,7 +8,9 @@ const bold = "\x1b[1m";
 const green = "\x1b[32m";
 const red = "\x1b[31m";
 const yellow = "\x1b[33m";
-
+const white = "\x1b[37m";
+const brightWhite = "\x1b[97m";
+const orange = "\x1b[38;5;208m";
 const bgMagenta = "\x1b[45m";
 
 export const theme = {
@@ -28,6 +30,8 @@ export const theme = {
   valueNo: red,
   valueOther: yellow,
   bold,
+  white,
+  orange,
 };
 
 export function styleMessage(text: string): string {
@@ -44,6 +48,25 @@ export function styleSelected(text: string): string {
 
 export function styleHint(text: string): string {
   return theme.dim + theme.hint + text + theme.reset;
+}
+
+export function styleSelectedRow(text: string): string {
+  return theme.selectedBg + brightWhite + bold + text + reset;
+}
+
+export function styleHintTips(text: string): string {
+  const withoutPipe = text.replace(/\|/g, "").trim();
+  const segments = withoutPipe.split(/\s{2,}/);
+  const parts = segments.map((seg) => {
+    const spaceIdx = seg.indexOf(" ");
+    const key = spaceIdx === -1 ? seg : seg.slice(0, spaceIdx);
+    const desc = spaceIdx === -1 ? "" : seg.slice(spaceIdx + 1);
+    const keyStyled = theme.orange + key + theme.reset;
+    const descStyled =
+      desc === "" ? "" : theme.white + " " + desc + theme.reset;
+    return keyStyled + descStyled;
+  });
+  return parts.join(theme.white + "  " + theme.reset);
 }
 
 export function styleSettingValue(value: string): string {
