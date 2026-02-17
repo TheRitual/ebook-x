@@ -1,3 +1,9 @@
+## [1.2.1](https://github.com/TheRitual/ebook-x/compare/v1.2.0...v1.2.1) (2026-02-17)
+
+### Bug Fixes
+
+- Load settings in CLI for improved configuration management ([6b55970](https://github.com/TheRitual/ebook-x/commit/6b55970a75c4307ca18738b7a40f3f1956e939f8))
+
 # [1.2.0](https://github.com/TheRitual/ebook-x/compare/v1.1.0...v1.2.0) (2026-02-17)
 
 ### Features
