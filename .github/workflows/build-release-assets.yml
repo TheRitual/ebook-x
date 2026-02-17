@@ -51,7 +51,7 @@ jobs:
           cache: "npm"
       - run: npm ci
       - run: npm run build
-      - run: npx pkg . -t node20-win-x64 -o ebook-x
+      - run: npx pkg . -t node20-win-x64 -o ebook-x-win-x64
       - run: |
           $version = "${{ needs.resolve-tag.outputs.tag }}".TrimStart('v')
           Move-Item -Path ebook-x-win-x64.exe -Destination "ebook-x-$version-win-x64.exe"
@@ -101,7 +101,7 @@ jobs:
           cache: "npm"
       - run: npm ci
       - run: npm run build
-      - run: npx pkg . -t node20-linux-x64 -o ebook-x
+      - run: npx pkg . -t node20-linux-x64 -o ebook-x-linux-x64
       - run: |
           version="${{ needs.resolve-tag.outputs.tag }}"
           version="${version#v}"
