@@ -1,3 +1,9 @@
+# [1.1.0](https://github.com/TheRitual/epub-x/compare/v1.0.0...v1.1.0) (2026-02-17)
+
+### Features
+
+- Revamp EPUB extraction CLI with settings and improved output structure ([c45bfc5](https://github.com/TheRitual/epub-x/commit/c45bfc529f1dac0d913ba8f649aa8701755eb760))
+
 # 1.0.0 (2026-02-17)
 
 ### Features
