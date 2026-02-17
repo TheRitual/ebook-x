@@ -10,8 +10,14 @@ describe("defaultConvertOptions", () => {
       "chapterTitleStyleTxt",
       "emDashToHyphen",
       "sanitizeWhitespace",
+      "newlinesHandling",
       "keepToc",
       "mdTocForChapters",
+      "splitChapters",
+      "chapterFileNameStyle",
+      "chapterFileNameCustomPrefix",
+      "indexTocForChapters",
+      "addBackLinkToChapters",
     ];
     for (const key of required) {
       expect(key in defaultConvertOptions).toBe(true);

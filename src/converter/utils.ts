@@ -38,17 +38,22 @@ export function htmlToMarkdown(html: string): string {
   return turndown.turndown(html);
 }
 
-function stripTagsAndCollapse(html: string): string {
+function htmlToPlainTextWithBlocks(html: string): string {
   return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<\/(h[1-6]|p|div|li|tr)\s*>/gi, "\n\n")
+    .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ");
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^[ \t]+|[ \t]+$/gm, "")
+    .trim();
 }
 
 export function htmlToPlainText(html: string): string {
-  const stripped = stripTagsAndCollapse(html);
-  return decodeHtmlEntities(stripped).trim();
+  const withBlocks = htmlToPlainTextWithBlocks(html);
+  return decodeHtmlEntities(withBlocks);
 }
 
 export function replaceEmDash(text: string): string {
@@ -61,8 +66,19 @@ export function sanitizeWhitespace(text: string): string {
     .replace(/\r\n?|\n/g, "\n")
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
-    .replace(/^\s+|\s+$/gm, "")
+    .replace(/^[ \t]+|[ \t]+$/gm, "")
     .trim();
+}
+
+export function handleNewlines(
+  text: string,
+  handling: "keep" | "one" | "two"
+): string {
+  if (handling === "keep") return text;
+  if (handling === "one") {
+    return text.replace(/\n{3,}/g, "\n");
+  }
+  return text.replace(/\n{3,}/g, "\n\n");
 }
 
 export function removeImageLinksFromMarkdown(md: string): string {
@@ -74,10 +90,25 @@ export function applyPostOptions(
   options: {
     emDashToHyphen: boolean;
     sanitizeWhitespace: boolean;
+    newlinesHandling: "keep" | "one" | "two";
   }
 ): string {
   let result = text;
   if (options.emDashToHyphen) result = replaceEmDash(result);
-  if (options.sanitizeWhitespace) result = sanitizeWhitespace(result);
+  if (options.sanitizeWhitespace) {
+    result = sanitizeWhitespace(result);
+  } else {
+    result = handleNewlines(result, options.newlinesHandling);
+  }
   return result;
+}
+
+const EXTRACTION_FOOTER_URL = "https://jsr.io/@ritual/ebook-x/";
+
+export function getExtractionFooter(format: "txt" | "md"): string {
+  const sep = "\n\n---\n\n";
+  if (format === "md") {
+    return `${sep}*Extracted with [ebook-x](${EXTRACTION_FOOTER_URL}).*`;
+  }
+  return `${sep}Extracted with ebook-x. ${EXTRACTION_FOOTER_URL}`;
 }

@@ -1,110 +1,114 @@
-import { select, input, confirm } from "@inquirer/prompts";
+import { input } from "@inquirer/prompts";
 import type { MainMenuAction, OutputFormat } from "./types.js";
-import type {
-  ConvertOptions,
-  ChapterTitleStyleTxt,
-} from "../converter/types.js";
+import { clearScreen, getFrameWidth, frameMessage } from "./utils.js";
+import { inquirerTheme } from "./colors.js";
+import { promptFramedSelect } from "./framed-select.js";
+
+export { promptFramedSelect } from "./framed-select.js";
+
+const FRAMED_HINT = " ↑/↓ move  Enter select  Esc back";
 
 export async function promptMainMenu(): Promise<MainMenuAction> {
-  const action = await select<MainMenuAction>({
-    message: "What do you want to do?",
-    choices: [
+  clearScreen();
+  const value = await promptFramedSelect(
+    "What do you want to do?",
+    [
       { name: "Convert an EPUB file", value: "convert" },
+      { name: "Settings", value: "settings" },
       { name: "Exit", value: "exit" },
     ],
-  });
-  return action;
+    FRAMED_HINT
+  );
+  return (value ?? "exit") as MainMenuAction;
 }
 
-export async function promptOutputFormat(): Promise<OutputFormat> {
-  const format = await select<OutputFormat>({
-    message: "Output format",
-    choices: [
+export async function promptOutputFormat(
+  defaultFormat: OutputFormat
+): Promise<OutputFormat> {
+  clearScreen();
+  const defaultIndex = defaultFormat === "md" ? 1 : 0;
+  const value = await promptFramedSelect(
+    "Output format",
+    [
       { name: "Plain text (.txt)", value: "txt" },
       { name: "Markdown (.md)", value: "md" },
     ],
-  });
-  return format;
+    FRAMED_HINT,
+    defaultIndex
+  );
+  return (value ?? "txt") as OutputFormat;
 }
 
-export async function promptConvertOptions(
-  format: OutputFormat
-): Promise<ConvertOptions> {
-  const includeImages =
-    format === "md"
-      ? await confirm({
-          message: "Extract and include images in output?",
-          default: false,
-        })
-      : false;
-
-  const addChapterTitles = await confirm({
-    message: "Add chapter titles (e.g. Rozdział N) to the extracted text?",
-    default: true,
-  });
-
-  let chapterTitleStyleTxt: ChapterTitleStyleTxt = "separated";
-  if (addChapterTitles && format === "txt") {
-    const style = await select<ChapterTitleStyleTxt>({
-      message: "Chapter title style in .txt",
-      choices: [
-        {
-          name: "Separated lines (Rozdział N on one line, title on next)",
-          value: "separated",
-        },
-        {
-          name: "Inline (Rozdział N - Title)",
-          value: "inline",
-        },
-      ],
-    });
-    chapterTitleStyleTxt = style;
-  }
-
-  const emDashToHyphen = await confirm({
-    message: "Replace em dash (—) with hyphen (-)?",
-    default: true,
-  });
-
-  const sanitizeWhitespace = await confirm({
-    message: "Sanitize all whitespace to spaces and newlines?",
-    default: true,
-  });
-
-  const keepToc = await confirm({
-    message: "Keep table of contents in the extracted text?",
-    default: false,
-  });
-
-  const mdTocForChapters =
-    format === "md"
-      ? await confirm({
-          message: "Create table of contents for the MD file (per chapter)?",
-          default: false,
-        })
-      : false;
-
-  return {
-    includeImages,
-    addChapterTitles,
-    chapterTitleStyleTxt,
-    emDashToHyphen,
-    sanitizeWhitespace,
-    keepToc,
-    mdTocForChapters,
-  };
+export interface SuccessScreenResult {
+  outputDir: string;
+  totalChapters: number;
 }
 
-export async function promptOutputFilename(): Promise<string> {
+const SUCCESS_QUOTES = [
+  "🎉  Done! Your future self will thank you.",
+  "🎉  Another one for the digital shelf.",
+  "🎉  Extraction complete. No books were harmed.",
+  "🎉  Done! Time for a reading break?",
+  "🎉  Your ebook is now in a more portable format.",
+  "🎉  All done! Happy reading.",
+  "🎉  Successfully extracted. Enjoy!",
+  "🎉  Conversion complete. You're all set.",
+  "🎉  Done! May your reading be smooth.",
+  "🎉  Extracted and ready. Nice work.",
+  "🎉  That's a wrap. Happy reading!",
+];
+
+function pickSuccessQuote(): string {
+  return SUCCESS_QUOTES[Math.floor(Math.random() * SUCCESS_QUOTES.length)]!;
+}
+
+function buildSuccessContentLines(result: SuccessScreenResult): string[] {
+  const maxPath = Math.max(20, getFrameWidth() - 6);
+  const pathDisplay =
+    result.outputDir.length <= maxPath
+      ? result.outputDir
+      : "…" + result.outputDir.slice(-maxPath + 1);
+  return [
+    "",
+    "📚  Your book has been successfully converted.",
+    "",
+    `  ${pathDisplay}`,
+    `  ${result.totalChapters} chapter${result.totalChapters === 1 ? "" : "s"} extracted`,
+    "",
+    pickSuccessQuote(),
+  ];
+}
+
+export async function promptSuccessScreen(
+  result: SuccessScreenResult
+): Promise<void> {
+  clearScreen();
+  await promptFramedSelect(
+    "✅  Success!",
+    [{ name: "▶  Continue", value: "continue" }],
+    " Enter to continue",
+    0,
+    buildSuccessContentLines(result)
+  );
+}
+
+export async function promptOutputFilename(
+  defaultName?: string
+): Promise<string> {
+  clearScreen();
   const name = await input({
-    message: "Output file name (without extension)",
+    message: frameMessage("Output file name (without extension)"),
+    default: defaultName,
+    theme: inquirerTheme,
     validate: (value) => {
       const trimmed = value.trim();
-      if (trimmed.length === 0) return "Please enter a non-empty name.";
+      if (trimmed.length === 0 && !defaultName)
+        return "Please enter a non-empty name.";
       if (/[<>:"/\\|?*]/.test(trimmed))
         return 'Name must not contain <>:"/\\|?*';
       return true;
     },
   });
-  return name.trim();
+  const trimmed = name.trim();
+  return trimmed || defaultName || "";
 }

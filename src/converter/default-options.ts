@@ -6,6 +6,12 @@ export const defaultConvertOptions: ConvertOptions = {
   chapterTitleStyleTxt: "separated",
   emDashToHyphen: false,
   sanitizeWhitespace: false,
+  newlinesHandling: "two",
   keepToc: false,
   mdTocForChapters: false,
+  splitChapters: false,
+  chapterFileNameStyle: "same",
+  chapterFileNameCustomPrefix: "",
+  indexTocForChapters: false,
+  addBackLinkToChapters: false,
 };

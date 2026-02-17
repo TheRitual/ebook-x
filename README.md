@@ -8,20 +8,23 @@ Interactive Node.js CLI to extract book text from EPUB files to plain text (`.tx
 
 ## Flow
 
-1. **Main menu** – Convert an EPUB file or exit.
-2. **File browser** – Navigate directories, go to parent (`..`), select an EPUB. Press **Esc** to cancel and return to the menu. No list wrapping (fixed top/bottom).
-3. **Output format** – Plain text (`.txt`) or Markdown (`.md`).
-4. **Options (prompts):**
-   - **Markdown only:** Extract and include images? If yes, images are saved under `output/<book-name>/__IMG__/` and linked with relative paths.
-   - Add chapter titles (e.g. _Rozdział N_)? For `.txt` you can choose _separated lines_ (number then title on next line) or _inline_ (_Rozdział N - Title_).
-   - Replace em dash (—) with hyphen (-)?
-   - Sanitize whitespace (normalize to spaces and newlines)?
-   - Keep table of contents in the extracted text?
-   - **Markdown only:** Create a table of contents at the top of the MD file (per chapter)?
-5. **Output file name** – Base name without extension.
-6. Conversion runs; progress and output path are shown. You can run again or exit.
+1. **Main menu** – Convert an EPUB file, open Settings, or exit.
+2. **File browser** – Navigate directories, go to parent (`..`), select an EPUB. Press **Esc** to cancel, **Ctrl/Cmd+S** to open Settings.
+3. **Output format** – Plain text (`.txt`) or Markdown (`.md`) (default from settings).
+4. **Output file name** – Base name without extension (default: source filename without extension).
+5. If the output book directory already exists, you are asked whether to remove and recreate it.
+6. Conversion runs using your saved settings; progress and output directory are shown.
+7. **Settings** – Press **Esc** to return to the main menu. Interactive list in three groups:
+   - **General:** Output path (directory browser), default format, split chapters, chapter file name style, em dash, sanitize whitespace, multiple newlines, keep TOC, restore defaults.
+   - **TXT only:** Add chapter titles, chapter title style.
+   - **MD only:** Include images, create TOC for MD files, create index file with TOC for chapters, add back link to chapters (when split + index TOC are on).
+   - On a setting row, press **Space** to cycle the value (e.g. Yes ↔ No); **Enter** to confirm and return to the list. Stored in the system config directory (Linux: `~/.config/epub-x`, macOS: `~/Library/Application Support/epub-x`, Windows: `%LOCALAPPDATA%\\epub-x`).
 
-Output is written to `output/<name>.txt` or `output/<name>.md`. If images are included, `output/<name>/__IMG__/` contains the image files.
+**Output structure:** Each book is written under a directory named after the output basename. The main file is inside that directory. Example for basename `book` with images and split chapters (MD):
+
+- `<output>/book/book.md` – index with table of contents (links to chapter files), or full book when not split
+- `<output>/book/chapters/*.md` – one file per chapter (when split chapters is on)
+- `<output>/book/__IMG__/*` – extracted images (MD, when include images is on)
 
 ---
 
@@ -80,9 +83,12 @@ npm run build && npm run run
 ## Behaviour details
 
 - **HTML entities** (e.g. `&#160;`, `&nbsp;`) are decoded so text and MD use normal characters.
-- **Images (MD):** When enabled, images are extracted to `output/<book-name>/__IMG__/` and referenced with relative paths from the `.md` file. When disabled, all image markdown is removed.
-- **Chapter titles:** Uses the EPUB spine/toc; you can add _Rozdział N_ (and optional title) in both formats.
-- **TOC:** “Keep table of contents” uses the EPUB’s TOC at the start of the file. “Create table of contents for the MD file” adds a generated _Spis rozdziałów_ at the top of the Markdown.
+- **Output path:** Configurable in Settings (directory browser). Default is `./output`.
+- **Images (MD):** When enabled, images are extracted to `<book-dir>/__IMG__/` and referenced with relative paths from the `.md` file(s). When disabled, all image markdown is removed.
+- **Chapter titles:** Uses the EPUB spine/toc; you can add _Chapter N_ (and optional title) in both formats.
+- **Split chapters:** When on, each chapter is written to `<book-dir>/chapters/` with file names from the “Chapter file name” setting (same as output e.g. `book-chapter-42`, `chapter` e.g. `chapter-42`, or custom prefix).
+- **Index TOC (MD):** When split chapters and “Create index file with TOC for chapters” are on, the main file is an index with links to each chapter file. “Add back link to chapters” adds a link back to the index in each chapter file.
+- **TOC:** “Keep table of contents” uses the EPUB’s TOC at the start of the single file (when not splitting).
 
 ---
 

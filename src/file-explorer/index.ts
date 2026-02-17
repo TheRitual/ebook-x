@@ -1,82 +1,55 @@
-import { select } from "@inquirer/prompts";
 import path from "node:path";
-import process from "node:process";
 import { listEntries } from "./utils.js";
 import type { FileExplorerEntry } from "./types.js";
+import { clearScreen } from "../menus/utils.js";
+import { promptFramedSelectLoop } from "../menus/framed-select.js";
 
-type SelectWithCancel = Promise<string> & { cancel: () => void };
+export type FileSelectionResult = string | null | "settings";
+
+const FILE_HINT = " ↑/↓ move  Enter select  Esc cancel  Ctrl/Cmd+S settings";
 
 export async function promptSelectEpubFile(
   startDir: string
-): Promise<string | null> {
+): Promise<FileSelectionResult> {
+  clearScreen();
   let currentDir = path.resolve(startDir);
 
-  for (;;) {
+  const getTitle = (): string => `Select file or directory (in ${currentDir})`;
+
+  const getChoices = (): { name: string; value: string }[] => {
     const entries = listEntries(currentDir);
     const parentEntry = entries.find((e) => e.type === "parent");
     const browseEntries = entries.filter((e) => e.type !== "parent");
-
-    const choices = [
+    return [
       ...(parentEntry
-        ? [
-            {
-              name: parentEntry.name,
-              value: parentEntry.path,
-              description: "Go to parent directory",
-            },
-          ]
+        ? [{ name: parentEntry.name, value: parentEntry.path }]
         : []),
-      ...browseEntries.map((e) => ({
-        name: e.name,
-        value: e.path,
-        description: e.type === "directory" ? "Open directory" : "Select EPUB",
-      })),
+      ...browseEntries.map((e) => ({ name: e.name, value: e.path })),
     ];
+  };
 
-    const promise = select({
-      message: `Select file or directory (in ${currentDir})`,
-      choices,
-      loop: false,
-      theme: {
-        style: {
-          keysHelpTip: (keys: [string, string][]) =>
-            [...keys, ["Esc", "cancel"] as [string, string]]
-              .map(([key, action]) => `${key} ${action}`)
-              .join(" • "),
-        },
-      },
-    });
-
-    if (process.stdin.isTTY) {
-      const onKeypress = (_ch: unknown, key?: { name?: string }): void => {
-        if (key?.name === "escape") (promise as SelectWithCancel).cancel();
-      };
-      process.stdin.on("keypress", onKeypress);
-      promise.finally(() => {
-        process.stdin.off("keypress", onKeypress);
-      });
+  const result = await promptFramedSelectLoop<string | "settings">(
+    getTitle,
+    getChoices,
+    FILE_HINT,
+    (key, selectedValue) => {
+      if (key === "escape") return null;
+      if (key === "ctrl+s") return "settings";
+      if (key === "enter" && selectedValue) {
+        const entries = listEntries(currentDir);
+        const selected = entries.find((e) => e.path === selectedValue) as
+          | FileExplorerEntry
+          | undefined;
+        if (!selected) return null;
+        if (selected.type === "epub") return selected.path;
+        if (selected.type === "parent" || selected.type === "directory") {
+          currentDir = selected.path;
+          return "continue";
+        }
+      }
+      return "continue";
     }
+  );
 
-    let choice: string;
-    try {
-      choice = await promise;
-    } catch (err) {
-      if (
-        err instanceof Error &&
-        (err.name === "CancelPromptError" || err.name === "ExitPromptError")
-      )
-        return null;
-      throw err;
-    }
-
-    const selected = entries.find((e) => e.path === choice) as
-      | FileExplorerEntry
-      | undefined;
-    if (!selected) continue;
-
-    if (selected.type === "epub") return selected.path;
-    if (selected.type === "parent" || selected.type === "directory") {
-      currentDir = selected.path;
-    }
-  }
+  return result;
 }

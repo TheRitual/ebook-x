@@ -18,13 +18,9 @@ function testBookExists(): boolean {
 }
 
 async function removeTestOutputs(): Promise<void> {
-  const outDir = resolveOutputDir();
-  for (const ext of [".txt", ".md"]) {
-    const p = path.join(outDir, TEST_OUTPUT_BASENAME + ext);
-    if (fs.existsSync(p)) fs.unlinkSync(p);
-  }
-  const dir = path.join(outDir, TEST_OUTPUT_BASENAME);
-  if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
+  const outDir = resolveOutputDir("");
+  const bookDir = path.join(outDir, TEST_OUTPUT_BASENAME);
+  if (fs.existsSync(bookDir)) fs.rmSync(bookDir, { recursive: true });
 }
 
 describe.skipIf(!testBookExists())("example book (books/testbook.epub)", () => {
@@ -33,11 +29,13 @@ describe.skipIf(!testBookExists())("example book (books/testbook.epub)", () => {
   });
 
   it("converts to txt and writes non-empty content", async () => {
+    const outDir = resolveOutputDir("");
     const result = await convertEpub(
       TEST_BOOK_PATH,
       TEST_OUTPUT_BASENAME,
       "txt",
-      defaultConvertOptions
+      defaultConvertOptions,
+      outDir
     );
     expect(result.totalChapters).toBeGreaterThan(0);
     expect(fs.existsSync(result.outputPath)).toBe(true);
@@ -47,11 +45,13 @@ describe.skipIf(!testBookExists())("example book (books/testbook.epub)", () => {
   });
 
   it("converts to md and writes non-empty content", async () => {
+    const outDir = resolveOutputDir("");
     const result = await convertEpub(
       TEST_BOOK_PATH,
       TEST_OUTPUT_BASENAME,
       "md",
-      defaultConvertOptions
+      defaultConvertOptions,
+      outDir
     );
     expect(result.totalChapters).toBeGreaterThan(0);
     expect(fs.existsSync(result.outputPath)).toBe(true);
@@ -69,20 +69,22 @@ describe.skipIf(!testBookExists())("example book (books/testbook.epub)", () => {
     expect(epubNames).toContain("testbook.epub");
   });
 
-  it("with addChapterTitles outputs Rozdział in txt", async () => {
+  it("with addChapterTitles outputs Chapter in txt", async () => {
     const options = {
       ...defaultConvertOptions,
       addChapterTitles: true,
       chapterTitleStyleTxt: "inline" as const,
     };
+    const outDir = resolveOutputDir("");
     const result = await convertEpub(
       TEST_BOOK_PATH,
       TEST_OUTPUT_BASENAME,
       "txt",
-      options
+      options,
+      outDir
     );
     const content = fs.readFileSync(result.outputPath, "utf-8");
-    expect(content).toMatch(/Rozdział 1/);
+    expect(content).toMatch(/Chapter 1/);
   });
 
   it("with keepToc includes table of contents in output", async () => {
@@ -90,14 +92,16 @@ describe.skipIf(!testBookExists())("example book (books/testbook.epub)", () => {
       ...defaultConvertOptions,
       keepToc: true,
     };
+    const outDir = resolveOutputDir("");
     const result = await convertEpub(
       TEST_BOOK_PATH,
       TEST_OUTPUT_BASENAME,
       "txt",
-      options
+      options,
+      outDir
     );
     const content = fs.readFileSync(result.outputPath, "utf-8");
-    expect(content).toMatch(/Table of contents|Spis|contents/i);
+    expect(content).toMatch(/Table of contents/i);
   });
 
   it("with emDashToHyphen replaces em dash in output", async () => {
@@ -105,28 +109,32 @@ describe.skipIf(!testBookExists())("example book (books/testbook.epub)", () => {
       ...defaultConvertOptions,
       emDashToHyphen: true,
     };
+    const outDir = resolveOutputDir("");
     const result = await convertEpub(
       TEST_BOOK_PATH,
       TEST_OUTPUT_BASENAME,
       "txt",
-      options
+      options,
+      outDir
     );
     const content = fs.readFileSync(result.outputPath, "utf-8");
     expect(content).not.toMatch(/—/);
   });
 
-  it("with mdTocForChapters includes Spis rozdziałów in md", async () => {
+  it("with mdTocForChapters includes Table of contents in md", async () => {
     const options = {
       ...defaultConvertOptions,
       mdTocForChapters: true,
     };
+    const outDir = resolveOutputDir("");
     const result = await convertEpub(
       TEST_BOOK_PATH,
       TEST_OUTPUT_BASENAME,
       "md",
-      options
+      options,
+      outDir
     );
     const content = fs.readFileSync(result.outputPath, "utf-8");
-    expect(content).toMatch(/Spis rozdziałów/);
+    expect(content).toMatch(/Table of contents/);
   });
 });

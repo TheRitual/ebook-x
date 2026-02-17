@@ -9,13 +9,33 @@ import {
   applyPostOptions,
   removeImageLinksFromMarkdown,
   decodeHtmlEntities,
+  getExtractionFooter,
 } from "./utils.js";
 
 const DEFAULT_OUTPUT_DIR = "output";
 const IMG_SUBDIR = "__IMG__";
+const CHAPTERS_DIR = "chapters";
 
-function getOutputDir(): string {
-  return path.join(process.cwd(), DEFAULT_OUTPUT_DIR);
+function getChapterFileName(
+  outputBasename: string,
+  chapterNum: number,
+  options: {
+    chapterFileNameStyle: ConvertOptions["chapterFileNameStyle"];
+    chapterFileNameCustomPrefix: string;
+  },
+  ext: string
+): string {
+  const num = String(chapterNum);
+  switch (options.chapterFileNameStyle) {
+    case "same":
+      return `${outputBasename}-chapter-${num}${ext}`;
+    case "chapter":
+      return `chapter-${num}${ext}`;
+    case "custom": {
+      const prefix = options.chapterFileNameCustomPrefix.trim() || "chapter";
+      return `${prefix}${num}${ext}`;
+    }
+  }
 }
 
 function isImageManifestItem(
@@ -58,23 +78,40 @@ function rewriteMarkdownImageUrls(
   return result;
 }
 
+function imagePathsForChapterFile(md: string): string {
+  return md.replace(/\]\(\s*__IMG__\//g, "](../__IMG__/");
+}
+
+function headerToAnchorSlug(headerText: string): string {
+  return headerText
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/^-+|-+$/g, "");
+}
+
 export async function convertEpub(
   epubPath: string,
   outputBasename: string,
   format: ConvertFormat,
-  options: ConvertOptions
+  options: ConvertOptions,
+  outputDir: string
 ): Promise<ConvertResult> {
   const epub = await EPub.createAsync(epubPath);
   const flow = epub.flow;
   const total = flow.length;
-  const outDir = getOutputDir();
-  fs.mkdirSync(outDir, { recursive: true });
+
+  const bookDir = path.join(outputDir, outputBasename);
+  fs.mkdirSync(bookDir, { recursive: true });
 
   const imgDir =
     format === "md" && options.includeImages
-      ? path.join(outDir, outputBasename, IMG_SUBDIR)
+      ? path.join(bookDir, IMG_SUBDIR)
       : null;
   if (imgDir) fs.mkdirSync(imgDir, { recursive: true });
+
+  const imagePrefix = IMG_SUBDIR;
 
   interface ManifestItem {
     href?: string;
@@ -96,12 +133,11 @@ export async function convertEpub(
 
   const savedImages = new Map<string, string>();
   const srcToNewPath = new Map<string, string>();
-  const imagePrefix = `${outputBasename}/${IMG_SUBDIR}`;
 
   const tocEntries: { index: number; title: string }[] = [];
   const parts: string[] = [];
 
-  if (options.keepToc && epub.toc?.length) {
+  if (options.keepToc && !options.splitChapters && epub.toc?.length) {
     interface TocEntry {
       title?: string;
     }
@@ -118,6 +154,8 @@ export async function convertEpub(
       );
     }
   }
+
+  const ext = format === "md" ? ".md" : ".txt";
 
   for (let i = 0; i < flow.length; i++) {
     const chapter = flow[i];
@@ -141,16 +179,16 @@ export async function convertEpub(
           if (!newRel) {
             try {
               const [buf, mime] = await epub.getImageAsync(manifestId);
-              const ext = mime?.startsWith("image/")
+              const extImg = mime?.startsWith("image/")
                 ? (mime.split("/")[1] ?? "png")
                 : "png";
-              const safeName = `${manifestId.replace(/[^a-zA-Z0-9_-]/g, "_")}.${ext}`;
+              const safeName = `${manifestId.replace(/[^a-zA-Z0-9_-]/g, "_")}.${extImg}`;
               const outPath = path.join(imgDir!, safeName);
               fs.writeFileSync(outPath, buf);
               newRel = `${imagePrefix}/${safeName}`;
               savedImages.set(manifestId, newRel);
             } catch {
-              // skip failed image
+              // skip
             }
           }
           if (newRel) srcToNewPath.set(src, newRel);
@@ -171,17 +209,18 @@ export async function convertEpub(
     content = applyPostOptions(content, {
       emDashToHyphen: options.emDashToHyphen,
       sanitizeWhitespace: options.sanitizeWhitespace,
+      newlinesHandling: options.newlinesHandling,
     });
 
     if (options.addChapterTitles) {
       const titleLine =
         format === "md"
-          ? `### Rozdział ${chapterNum}${chapterTitle ? ` - ${chapterTitle}` : ""}`
+          ? `### Chapter ${chapterNum}${chapterTitle ? ` - ${chapterTitle}` : ""}`
           : options.chapterTitleStyleTxt === "inline"
-            ? `Rozdział ${chapterNum}${chapterTitle ? ` - ${chapterTitle}` : ""}`
+            ? `Chapter ${chapterNum}${chapterTitle ? ` - ${chapterTitle}` : ""}`
             : chapterTitle
-              ? `Rozdział ${chapterNum}\n\n${chapterTitle}`
-              : `Rozdział ${chapterNum}`;
+              ? `Chapter ${chapterNum}\n\n${chapterTitle}`
+              : `Chapter ${chapterNum}`;
       content = titleLine + "\n\n" + content;
     }
 
@@ -191,25 +230,81 @@ export async function convertEpub(
   }
   process.stdout.write("\n");
 
-  let body = parts.join("\n\n");
-  if (format === "md" && options.mdTocForChapters && tocEntries.length) {
-    const tocMd =
-      "## Spis rozdziałów\n\n" +
-      tocEntries
-        .map((e) => `- Rozdział ${e.index}${e.title ? ` - ${e.title}` : ""}`)
-        .join("\n");
-    body = tocMd + "\n\n" + body;
+  const mainFilePath = path.join(bookDir, outputBasename + ext);
+
+  if (options.splitChapters) {
+    const chaptersDir = path.join(bookDir, CHAPTERS_DIR);
+    fs.mkdirSync(chaptersDir, { recursive: true });
+
+    const indexLink =
+      format === "md" &&
+      options.indexTocForChapters &&
+      options.addBackLinkToChapters
+        ? `\n\n[← Back to index](../${outputBasename}.md)\n`
+        : "";
+
+    for (let i = 0; i < parts.length; i++) {
+      const chapterNum = i + 1;
+      const fileName = getChapterFileName(
+        outputBasename,
+        chapterNum,
+        options,
+        ext
+      );
+      const chapterPath = path.join(chaptersDir, fileName);
+      let chapterContent = parts[i]!;
+      if (format === "md") {
+        chapterContent = imagePathsForChapterFile(chapterContent);
+        if (indexLink) chapterContent = chapterContent + indexLink;
+      }
+      chapterContent = chapterContent + getExtractionFooter(format);
+      fs.writeFileSync(chapterPath, chapterContent, "utf-8");
+    }
+
+    if (format === "md" && options.indexTocForChapters) {
+      const chapterLines = tocEntries.map((e) => {
+        const fileName = getChapterFileName(
+          outputBasename,
+          e.index,
+          options,
+          ".md"
+        );
+        return `- [Chapter ${e.index}${e.title ? ` - ${e.title}` : ""}](${CHAPTERS_DIR}/${fileName})`;
+      });
+      const indexBody =
+        "## Table of contents\n\n" +
+        chapterLines.join("\n") +
+        "\n" +
+        getExtractionFooter("md");
+      fs.writeFileSync(mainFilePath, indexBody, "utf-8");
+    }
+  } else {
+    let body = parts.join("\n\n");
+    if (format === "md" && options.mdTocForChapters && tocEntries.length) {
+      const tocLines = tocEntries.map((e) => {
+        const label = `Chapter ${e.index}${e.title ? ` - ${e.title}` : ""}`;
+        const headerText = `Chapter ${e.index}${e.title ? ` - ${e.title}` : ""}`;
+        const slug = headerToAnchorSlug(headerText);
+        return `- [${label}](#${slug})`;
+      });
+      const tocMd = "## Table of contents\n\n" + tocLines.join("\n");
+      body = tocMd + "\n\n" + body;
+    }
+    body = body + getExtractionFooter(format);
+    fs.writeFileSync(mainFilePath, body, "utf-8");
   }
 
-  const ext = format === "md" ? ".md" : ".txt";
-  const outputPath = path.join(outDir, outputBasename + ext);
-  fs.writeFileSync(outputPath, body, "utf-8");
-
-  return { outputPath, totalChapters: total };
+  return {
+    outputPath: mainFilePath,
+    outputDir: bookDir,
+    totalChapters: total,
+  };
 }
 
-export function resolveOutputDir(): string {
-  const dir = getOutputDir();
+export function resolveOutputDir(customPath: string): string {
+  const dir = customPath.trim()
+    ? path.resolve(customPath)
+    : path.join(process.cwd(), DEFAULT_OUTPUT_DIR);
   fs.mkdirSync(dir, { recursive: true });
   return path.resolve(dir);
 }

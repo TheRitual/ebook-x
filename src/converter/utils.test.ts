@@ -27,6 +27,13 @@ describe("htmlToPlainText", () => {
     expect(htmlToPlainText("<style>body{}</style>foo")).toBe("foo");
     expect(htmlToPlainText("<script>alert(1)</script>bar")).toBe("bar");
   });
+
+  it("preserves newlines after block elements (headings, paragraphs)", () => {
+    const html = "<h2>Chapter 3</h2><h3>BRAN</h3><p>Morning was clear.</p>";
+    expect(htmlToPlainText(html)).toBe(
+      "Chapter 3\n\nBRAN\n\nMorning was clear."
+    );
+  });
 });
 
 describe("decodeHtmlEntities", () => {
@@ -83,6 +90,7 @@ describe("applyPostOptions", () => {
       applyPostOptions("a — b", {
         emDashToHyphen: true,
         sanitizeWhitespace: false,
+        newlinesHandling: "keep",
       })
     ).toBe("a - b");
   });
@@ -92,6 +100,7 @@ describe("applyPostOptions", () => {
       applyPostOptions("a  b\tc", {
         emDashToHyphen: false,
         sanitizeWhitespace: true,
+        newlinesHandling: "keep",
       })
     ).toBe("a b c");
   });
@@ -101,6 +110,7 @@ describe("applyPostOptions", () => {
       applyPostOptions("a — b  c", {
         emDashToHyphen: true,
         sanitizeWhitespace: true,
+        newlinesHandling: "keep",
       })
     ).toBe("a - b c");
   });
@@ -111,6 +121,7 @@ describe("applyPostOptions", () => {
       applyPostOptions(text, {
         emDashToHyphen: false,
         sanitizeWhitespace: false,
+        newlinesHandling: "keep",
       })
     ).toBe(text);
   });
