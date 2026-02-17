@@ -1,6 +1,6 @@
 {
   "name": "@ritual/ebook-x",
-  "version": "1.2.7",
+  "version": "1.2.8",
   "exports": "./src/cli.ts",
   "license": "MIT"
 }

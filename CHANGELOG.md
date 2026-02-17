@@ -1,3 +1,9 @@
+## [1.2.8](https://github.com/TheRitual/ebook-x/compare/v1.2.7...v1.2.8) (2026-02-17)
+
+### Bug Fixes
+
+- Update AppImage generation process in build-release-assets workflow ([d0ebaf1](https://github.com/TheRitual/ebook-x/commit/d0ebaf1bd0ccd6d69f200213a4643ef1dd9fa9d7))
+
 ## [1.2.7](https://github.com/TheRitual/ebook-x/compare/v1.2.6...v1.2.7) (2026-02-17)
 
 ### Bug Fixes
