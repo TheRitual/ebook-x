@@ -1,3 +1,16 @@
+# Unreleased
+
+### Fixed
+
+- View selected files: Images column now shows Yes when any selected format (MD/HTML/JSON) has “Include images” enabled in settings (previously only the first format was considered).
+- View selected files: Removed duplicate bottom border line so the frame has a single bottom edge.
+
+### Changed
+
+- HTML styled output: Extraction footer and chapter navigation (previous / TOC / next) links now use the active HTML theme. New theme classes: extraction footer link, chapter nav, chapter nav link. Links have no underline by default and underline on hover; built-in themes updated for consistent footer and nav styling.
+
+---
+
 ## [1.2.1](https://github.com/TheRitual/ebook-x/compare/v1.2.0...v1.2.1) (2026-02-17)
 
 ### Bug Fixes

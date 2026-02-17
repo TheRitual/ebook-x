@@ -103,17 +103,19 @@ export function applyPostOptions(
   return result;
 }
 
-const EXTRACTION_FOOTER_URL = "https://jsr.io/@ritual/ebook-x/";
+const EXTRACTION_FOOTER_AUTHOR = "MGIK";
+const EXTRACTION_FOOTER_REPO_URL = "https://github.com/ritual/ebook-x";
+const EXTRACTION_FOOTER_TOOL_URL = "https://jsr.io/@ritual/ebook-x/";
 
 export function getExtractionFooter(format: "txt" | "md" | "html"): string {
-  const sep = "\n\n---\n\n";
+  const sep = "\n—\n\n";
   if (format === "md") {
-    return `${sep}*Extracted with [ebook-x](${EXTRACTION_FOOTER_URL}).*`;
+    return `${sep}*[ebook-x](${EXTRACTION_FOOTER_TOOL_URL}) by ${EXTRACTION_FOOTER_AUTHOR} · [repo](${EXTRACTION_FOOTER_REPO_URL})*`;
   }
   if (format === "html") {
-    return `${sep}<p><em>Extracted with <a href="${EXTRACTION_FOOTER_URL}">ebook-x</a>.</em></p>`;
+    return `${sep}<p class="extraction-footer"><a class="extraction-footer-link" href="${EXTRACTION_FOOTER_TOOL_URL}">ebook-x</a> by ${EXTRACTION_FOOTER_AUTHOR} · <a class="extraction-footer-link" href="${EXTRACTION_FOOTER_REPO_URL}">repository</a></p>`;
   }
-  return `${sep}Extracted with ebook-x. ${EXTRACTION_FOOTER_URL}`;
+  return `${sep}ebook-x by ${EXTRACTION_FOOTER_AUTHOR} · ${EXTRACTION_FOOTER_REPO_URL}`;
 }
 
 export function extractBodyInnerHtml(html: string): string {

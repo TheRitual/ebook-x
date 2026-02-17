@@ -3,21 +3,28 @@
 import process from "node:process";
 import path from "node:path";
 import fs from "node:fs";
-import { promptSelectEpubFiles } from "./file-explorer/index.js";
+import {
+  promptSelectEpubFiles,
+  type SplitFilePickerState,
+} from "./file-explorer/index.js";
+import { promptViewSelectedFilesAndSettings } from "./file-explorer/view-selected-files-prompt.js";
 import type { SelectedFile } from "./file-explorer/selected-file-types.js";
 import {
   promptMainMenu,
-  promptChangeSettingsBeforeConverting,
+  promptAfterFileSelection,
   promptSuccessScreen,
   promptFramedSelect,
+  promptHowTo,
 } from "./menus/index.js";
 import { promptOutputFormatsMulti } from "./menus/format-multi-select.js";
 import { clearScreen } from "./menus/utils.js";
 import { convertEpub, resolveOutputDir } from "./converter/index.js";
 import { loadSettings, saveSettings } from "./settings/storage.js";
 import { promptSettingsMenu } from "./settings/menu.js";
+import { initI18n, resolveExportLocale, t } from "./i18n/index.js";
 import { setCurrentTheme, resolveTheme } from "./themes/index.js";
 import type { AppSettings } from "./settings/types.js";
+import type { OutputFormat } from "./menus/types.js";
 import type { ConvertOptions } from "./converter/types.js";
 import { exitNicely } from "./exit.js";
 
@@ -33,38 +40,52 @@ function settingsToConvertOptions(
   format: "txt" | "md" | "json" | "html",
   perFile?: SelectedFile
 ): ConvertOptions {
-  const includeImages =
-    perFile?.includeImages ??
-    (format === "md" || format === "html" || format === "json"
-      ? settings.includeImages
-      : false);
   const opts: ConvertOptions = {
     chapterIndices: perFile?.chapterIndices ?? undefined,
-    includeImages,
+    includeImages: false,
     addChapterTitles: settings.addChapterTitles,
     chapterTitleStyleTxt: settings.chapterTitleStyleTxt,
     emDashToHyphen: settings.emDashToHyphen,
     sanitizeWhitespace: settings.sanitizeWhitespace,
     newlinesHandling: settings.newlinesHandling,
-    keepToc: settings.keepToc,
-    mdTocForChapters:
-      format === "md" || format === "html" ? settings.mdTocForChapters : false,
-    splitChapters: settings.splitChapters,
+    keepToc: false,
+    mdTocForChapters: false,
+    splitChapters: false,
     chapterFileNameStyle: settings.chapterFileNameStyle,
     chapterFileNameCustomPrefix: settings.chapterFileNameCustomPrefix,
-    indexTocForChapters:
-      format === "md" || format === "html"
-        ? settings.indexTocForChapters
-        : false,
-    addBackLinkToChapters:
-      format === "md" || format === "html"
-        ? settings.addBackLinkToChapters
-        : false,
+    indexTocForChapters: false,
+    addBackLinkToChapters: false,
+    addNextLinkToChapters: false,
+    addPrevLinkToChapters: false,
   };
-  if (format === "html") {
-    opts.htmlStyle = settings.htmlStyle;
-    opts.htmlTheme = settings.htmlTheme;
+  if (format === "md") {
+    const fm = settings.formats.md;
+    opts.includeImages = perFile?.includeImages ?? fm.includeImages;
+    opts.keepToc = fm.keepToc;
+    opts.mdTocForChapters = fm.tocInChaptersFile;
+    opts.splitChapters = fm.splitChapters;
+    opts.indexTocForChapters = fm.indexWithToc;
+    opts.addBackLinkToChapters = fm.addBackLink;
+    opts.addNextLinkToChapters = fm.addNextLink;
+    opts.addPrevLinkToChapters = fm.addPrevLink;
+  } else if (format === "html") {
+    const fm = settings.formats.html;
+    opts.includeImages = perFile?.includeImages ?? fm.includeImages;
+    opts.keepToc = fm.keepToc;
+    opts.mdTocForChapters = fm.tocInChaptersFile;
+    opts.splitChapters = fm.splitChapters;
+    opts.indexTocForChapters = fm.indexWithToc;
+    opts.addBackLinkToChapters = fm.addBackLink;
+    opts.addNextLinkToChapters = fm.addNextLink;
+    opts.addPrevLinkToChapters = fm.addPrevLink;
+    opts.htmlStyle = fm.style;
+    opts.htmlStyleId = fm.htmlStyleId;
+  } else if (format === "json") {
+    const fm = settings.formats.json;
+    opts.includeImages = perFile?.includeImages ?? fm.includeImages;
+    opts.splitChapters = fm.splitChapters;
   }
+  opts.exportLocale = resolveExportLocale(settings.exportLocale);
   return opts;
 }
 
@@ -77,6 +98,7 @@ async function run(): Promise<void> {
   });
 
   let settings = loadSettings();
+  initI18n(settings.appLocale, settings.exportLocale);
   setCurrentTheme(resolveTheme(settings.cliThemeId));
   const outputDir = resolveOutputDir(settings.outputPath);
   console.log("ebook-x – ebook extractor");
@@ -95,105 +117,177 @@ async function run(): Promise<void> {
         if (next !== null) {
           settings = next;
           saveSettings(settings);
-          console.log("Settings saved.\n");
+          console.log(t("settings_saved") + "\n");
         }
+        continue;
+      }
+
+      if (action === "howto") {
+        await promptHowTo();
         continue;
       }
 
       const startDir = process.cwd();
-      const fileSelection = await promptSelectEpubFiles(startDir);
-      if (!fileSelection) {
-        console.log("No file selected.");
-        continue;
-      }
-
-      if (fileSelection === "settings") {
-        settings = loadSettings();
-        const next = await promptSettingsMenu(settings);
-        if (next !== null) {
-          settings = next;
-          saveSettings(settings);
-          console.log("Settings saved.\n");
+      let pickerState: Partial<SplitFilePickerState> | undefined = undefined;
+      for (;;) {
+        const fileSelection = await promptSelectEpubFiles(
+          startDir,
+          pickerState,
+          settings
+        );
+        pickerState = undefined;
+        if (!fileSelection) {
+          console.log("No file selected.");
+          break;
         }
-        continue;
-      }
 
-      const normalized: SelectedFile[] = fileSelection;
-
-      const changeSettings = await promptChangeSettingsBeforeConverting();
-      if (changeSettings) {
-        settings = loadSettings();
-        const next = await promptSettingsMenu(settings);
-        if (next !== null) {
-          settings = next;
-          saveSettings(settings);
-          console.log("Settings saved.\n");
+        if (fileSelection === "settings") {
+          settings = loadSettings();
+          const next = await promptSettingsMenu(settings);
+          if (next !== null) {
+            settings = next;
+            saveSettings(settings);
+            console.log(t("settings_saved") + "\n");
+          }
+          continue;
         }
-      }
 
-      const formats = await promptOutputFormatsMulti(settings.defaultFormats);
-      if (!formats || formats.length === 0) {
-        console.log("No format selected.");
-        continue;
-      }
+        const normalized: SelectedFile[] = fileSelection;
+        pickerState = {
+          selected: normalized,
+          currentDir:
+            normalized.length > 0
+              ? path.dirname(normalized[0]!.path)
+              : startDir,
+          leftIndex: 0,
+          rightIndex: 0,
+          leftActive: true,
+        };
+        let formats: OutputFormat[] =
+          settings.defaultFormats.length > 0
+            ? settings.defaultFormats
+            : (["md"] as OutputFormat[]);
+        let exitToMainMenu = false;
 
-      const rootOutputDir = resolveOutputDir(settings.outputPath);
-      const useFormatSubdirs = formats.length > 1;
+        for (;;) {
+          const action = await promptAfterFileSelection();
+          if (!action || action === "cancel") {
+            exitToMainMenu = true;
+            pickerState = undefined;
+            break;
+          }
+          if (action === "back") break;
 
-      for (let i = 0; i < normalized.length; i++) {
-        const file = normalized[i]!;
-        const basename = file.outputBasename;
-        const bookDir = path.join(rootOutputDir, basename);
+          if (action === "select_formats") {
+            const f = await promptOutputFormatsMulti(formats);
+            if (f && f.length > 0) formats = f;
+            continue;
+          }
 
-        if (fs.existsSync(bookDir)) {
-          clearScreen();
-          const overwrite = await promptFramedSelect(
-            `Directory already exists: ${bookDir}. Remove and recreate?`,
-            [
-              { name: "Yes", value: "Yes" },
-              { name: "No", value: "No" },
-            ],
-            " ↑/↓ move  Enter select  Esc back",
-            1
-          );
-          if (overwrite === "Yes") {
-            fs.rmSync(bookDir, { recursive: true });
-          } else {
-            console.log("Skipped.\n");
+          if (action === "change_settings") {
+            settings = loadSettings();
+            const next = await promptSettingsMenu(settings);
+            if (next !== null) {
+              settings = next;
+              saveSettings(settings);
+              console.log(t("settings_saved") + "\n");
+            }
+            continue;
+          }
+
+          if (action === "view_selected_files") {
+            const updated = await promptViewSelectedFilesAndSettings(
+              normalized,
+              formats,
+              settings
+            );
+            if (updated !== null) {
+              normalized.length = 0;
+              normalized.push(...updated);
+            }
+            continue;
+          }
+
+          if (action === "extract") {
+            if (formats.length === 0) {
+              formats =
+                settings.defaultFormats.length > 0
+                  ? settings.defaultFormats
+                  : (["md"] as OutputFormat[]);
+            }
+            const rootOutputDir = resolveOutputDir(settings.outputPath);
+            const useFormatSubdirs = formats.length > 1;
+
+            for (let i = 0; i < normalized.length; i++) {
+              const file = normalized[i]!;
+              const basename = file.outputBasename;
+              const bookDir = path.join(rootOutputDir, basename);
+
+              if (fs.existsSync(bookDir)) {
+                clearScreen();
+                const overwrite = await promptFramedSelect(
+                  `Directory already exists: ${bookDir}. Remove and recreate?`,
+                  [
+                    { name: "Yes", value: "Yes" },
+                    { name: "No", value: "No" },
+                  ],
+                  " ↑/↓ move  Enter select  Esc back",
+                  1
+                );
+                if (overwrite === "Yes") {
+                  fs.rmSync(bookDir, { recursive: true });
+                } else {
+                  console.log("Skipped.\n");
+                  continue;
+                }
+              }
+
+              let lastResult: {
+                outputDir: string;
+                totalChapters: number;
+              } | null = null;
+              for (const format of formats) {
+                const prefix =
+                  normalized.length > 1
+                    ? `[${i + 1}/${normalized.length}] `
+                    : "";
+                const formatLabel = formats.length > 1 ? ` ${format}` : "";
+                console.log(
+                  `${prefix}Converting ${path.basename(file.path)}${formatLabel}...`
+                );
+                const options = settingsToConvertOptions(
+                  settings,
+                  format,
+                  file
+                );
+                const result = await convertEpub(
+                  file.path,
+                  basename,
+                  format,
+                  options,
+                  rootOutputDir,
+                  useFormatSubdirs ? format : undefined
+                );
+                lastResult = {
+                  outputDir: result.outputDir,
+                  totalChapters: result.totalChapters,
+                };
+              }
+              if (lastResult) {
+                const displayDir = useFormatSubdirs
+                  ? bookDir
+                  : lastResult.outputDir;
+                await promptSuccessScreen({
+                  outputDir: displayDir,
+                  totalChapters: lastResult.totalChapters,
+                });
+              }
+            }
             continue;
           }
         }
 
-        let lastResult: { outputDir: string; totalChapters: number } | null =
-          null;
-        for (const format of formats) {
-          const prefix =
-            normalized.length > 1 ? `[${i + 1}/${normalized.length}] ` : "";
-          const formatLabel = formats.length > 1 ? ` ${format}` : "";
-          console.log(
-            `${prefix}Converting ${path.basename(file.path)}${formatLabel}...`
-          );
-          const options = settingsToConvertOptions(settings, format, file);
-          const result = await convertEpub(
-            file.path,
-            basename,
-            format,
-            options,
-            rootOutputDir,
-            useFormatSubdirs ? format : undefined
-          );
-          lastResult = {
-            outputDir: result.outputDir,
-            totalChapters: result.totalChapters,
-          };
-        }
-        if (lastResult) {
-          const displayDir = useFormatSubdirs ? bookDir : lastResult.outputDir;
-          await promptSuccessScreen({
-            outputDir: displayDir,
-            totalChapters: lastResult.totalChapters,
-          });
-        }
+        if (exitToMainMenu) break;
       }
     } catch (err) {
       if (isCancelOrExit(err)) exitNicely();

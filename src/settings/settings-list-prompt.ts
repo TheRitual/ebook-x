@@ -24,10 +24,15 @@ import {
   truncateToPlainLength,
   PAGE_JUMP,
 } from "../menus/utils.js";
+import { promptFramedSelect } from "../menus/framed-select.js";
+
+function settingsEqual(a: AppSettings, b: AppSettings): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 export type SettingsRow = { name: string; value: string; disabled?: boolean };
 
-const HTML_STYLE_ORDER: HtmlStyle[] = ["none", "styled", "custom"];
+const HTML_STYLE_ORDER: HtmlStyle[] = ["none", "styled"];
 const DESCRIPTION_LINES = 4;
 
 function wrapDescription(text: string, width: number): string[] {
@@ -47,13 +52,36 @@ function wrapDescription(text: string, width: number): string[] {
   return lines;
 }
 
+function isSectionSeparator(row: SettingsRow): boolean {
+  return row.disabled === true;
+}
+
+function getSectionStartIndices(rows: SettingsRow[]): number[] {
+  const starts: number[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    while (i < rows.length && rows[i] && isSectionSeparator(rows[i]!)) i++;
+    if (i < rows.length) starts.push(i);
+    while (i < rows.length && rows[i] && !isSectionSeparator(rows[i]!)) i++;
+  }
+  return starts;
+}
+
+function indexOfActiveSectionHeader(
+  rows: SettingsRow[],
+  selectedIndex: number
+): number | null {
+  let i = selectedIndex;
+  while (i >= 0) {
+    if (rows[i] && isSectionSeparator(rows[i]!)) return i;
+    i--;
+  }
+  return null;
+}
+
 function cycleSettingForward(key: SettingKey, settings: AppSettings): void {
+  const f = settings.formats;
   switch (key) {
-    case "htmlStyle": {
-      const i = HTML_STYLE_ORDER.indexOf(settings.htmlStyle);
-      settings.htmlStyle = HTML_STYLE_ORDER[(i + 1) % HTML_STYLE_ORDER.length];
-      break;
-    }
     case "addChapterTitles":
       settings.addChapterTitles = !settings.addChapterTitles;
       break;
@@ -75,12 +103,6 @@ function cycleSettingForward(key: SettingKey, settings: AppSettings): void {
             ? "two"
             : "keep";
       break;
-    case "keepToc":
-      settings.keepToc = !settings.keepToc;
-      break;
-    case "splitChapters":
-      settings.splitChapters = !settings.splitChapters;
-      break;
     case "chapterFileNameStyle":
       settings.chapterFileNameStyle =
         settings.chapterFileNameStyle === "same"
@@ -89,18 +111,66 @@ function cycleSettingForward(key: SettingKey, settings: AppSettings): void {
             ? "custom"
             : "same";
       break;
-    case "includeImages":
-      settings.includeImages = !settings.includeImages;
+    case "md_splitChapters":
+      f.md.splitChapters = !f.md.splitChapters;
       break;
-    case "mdTocForChapters":
-      settings.mdTocForChapters = !settings.mdTocForChapters;
+    case "md_keepToc":
+      f.md.keepToc = !f.md.keepToc;
       break;
-    case "indexTocForChapters":
-      settings.indexTocForChapters = !settings.indexTocForChapters;
-      if (!settings.indexTocForChapters) settings.addBackLinkToChapters = false;
+    case "md_tocInChaptersFile":
+      f.md.tocInChaptersFile = !f.md.tocInChaptersFile;
       break;
-    case "addBackLinkToChapters":
-      settings.addBackLinkToChapters = !settings.addBackLinkToChapters;
+    case "md_indexWithToc":
+      f.md.indexWithToc = !f.md.indexWithToc;
+      if (!f.md.indexWithToc) f.md.addBackLink = false;
+      break;
+    case "md_addBackLink":
+      f.md.addBackLink = !f.md.addBackLink;
+      break;
+    case "md_addNextLink":
+      f.md.addNextLink = !f.md.addNextLink;
+      break;
+    case "md_addPrevLink":
+      f.md.addPrevLink = !f.md.addPrevLink;
+      break;
+    case "md_includeImages":
+      f.md.includeImages = !f.md.includeImages;
+      break;
+    case "html_splitChapters":
+      f.html.splitChapters = !f.html.splitChapters;
+      break;
+    case "html_keepToc":
+      f.html.keepToc = !f.html.keepToc;
+      break;
+    case "html_tocInChaptersFile":
+      f.html.tocInChaptersFile = !f.html.tocInChaptersFile;
+      break;
+    case "html_indexWithToc":
+      f.html.indexWithToc = !f.html.indexWithToc;
+      if (!f.html.indexWithToc) f.html.addBackLink = false;
+      break;
+    case "html_addBackLink":
+      f.html.addBackLink = !f.html.addBackLink;
+      break;
+    case "html_addNextLink":
+      f.html.addNextLink = !f.html.addNextLink;
+      break;
+    case "html_addPrevLink":
+      f.html.addPrevLink = !f.html.addPrevLink;
+      break;
+    case "html_includeImages":
+      f.html.includeImages = !f.html.includeImages;
+      break;
+    case "html_style": {
+      const i = HTML_STYLE_ORDER.indexOf(f.html.style);
+      f.html.style = HTML_STYLE_ORDER[(i + 1) % HTML_STYLE_ORDER.length];
+      break;
+    }
+    case "json_splitChapters":
+      f.json.splitChapters = !f.json.splitChapters;
+      break;
+    case "json_includeImages":
+      f.json.includeImages = !f.json.includeImages;
       break;
     default:
       break;
@@ -108,15 +178,8 @@ function cycleSettingForward(key: SettingKey, settings: AppSettings): void {
 }
 
 function cycleSettingBackward(key: SettingKey, settings: AppSettings): void {
+  const f = settings.formats;
   switch (key) {
-    case "htmlStyle": {
-      const i = HTML_STYLE_ORDER.indexOf(settings.htmlStyle);
-      settings.htmlStyle =
-        HTML_STYLE_ORDER[
-          (i - 1 + HTML_STYLE_ORDER.length) % HTML_STYLE_ORDER.length
-        ];
-      break;
-    }
     case "addChapterTitles":
       settings.addChapterTitles = !settings.addChapterTitles;
       break;
@@ -138,12 +201,6 @@ function cycleSettingBackward(key: SettingKey, settings: AppSettings): void {
             ? "keep"
             : "one";
       break;
-    case "keepToc":
-      settings.keepToc = !settings.keepToc;
-      break;
-    case "splitChapters":
-      settings.splitChapters = !settings.splitChapters;
-      break;
     case "chapterFileNameStyle":
       settings.chapterFileNameStyle =
         settings.chapterFileNameStyle === "same"
@@ -152,18 +209,69 @@ function cycleSettingBackward(key: SettingKey, settings: AppSettings): void {
             ? "same"
             : "chapter";
       break;
-    case "includeImages":
-      settings.includeImages = !settings.includeImages;
+    case "md_splitChapters":
+      f.md.splitChapters = !f.md.splitChapters;
       break;
-    case "mdTocForChapters":
-      settings.mdTocForChapters = !settings.mdTocForChapters;
+    case "md_keepToc":
+      f.md.keepToc = !f.md.keepToc;
       break;
-    case "indexTocForChapters":
-      settings.indexTocForChapters = !settings.indexTocForChapters;
-      if (!settings.indexTocForChapters) settings.addBackLinkToChapters = false;
+    case "md_tocInChaptersFile":
+      f.md.tocInChaptersFile = !f.md.tocInChaptersFile;
       break;
-    case "addBackLinkToChapters":
-      settings.addBackLinkToChapters = !settings.addBackLinkToChapters;
+    case "md_indexWithToc":
+      f.md.indexWithToc = !f.md.indexWithToc;
+      if (!f.md.indexWithToc) f.md.addBackLink = false;
+      break;
+    case "md_addBackLink":
+      f.md.addBackLink = !f.md.addBackLink;
+      break;
+    case "md_addNextLink":
+      f.md.addNextLink = !f.md.addNextLink;
+      break;
+    case "md_addPrevLink":
+      f.md.addPrevLink = !f.md.addPrevLink;
+      break;
+    case "md_includeImages":
+      f.md.includeImages = !f.md.includeImages;
+      break;
+    case "html_splitChapters":
+      f.html.splitChapters = !f.html.splitChapters;
+      break;
+    case "html_keepToc":
+      f.html.keepToc = !f.html.keepToc;
+      break;
+    case "html_tocInChaptersFile":
+      f.html.tocInChaptersFile = !f.html.tocInChaptersFile;
+      break;
+    case "html_indexWithToc":
+      f.html.indexWithToc = !f.html.indexWithToc;
+      if (!f.html.indexWithToc) f.html.addBackLink = false;
+      break;
+    case "html_addBackLink":
+      f.html.addBackLink = !f.html.addBackLink;
+      break;
+    case "html_addNextLink":
+      f.html.addNextLink = !f.html.addNextLink;
+      break;
+    case "html_addPrevLink":
+      f.html.addPrevLink = !f.html.addPrevLink;
+      break;
+    case "html_includeImages":
+      f.html.includeImages = !f.html.includeImages;
+      break;
+    case "html_style": {
+      const i = HTML_STYLE_ORDER.indexOf(f.html.style);
+      f.html.style =
+        HTML_STYLE_ORDER[
+          (i - 1 + HTML_STYLE_ORDER.length) % HTML_STYLE_ORDER.length
+        ];
+      break;
+    }
+    case "json_splitChapters":
+      f.json.splitChapters = !f.json.splitChapters;
+      break;
+    case "json_includeImages":
+      f.json.includeImages = !f.json.includeImages;
       break;
     default:
       break;
@@ -176,19 +284,31 @@ export function cycleSetting(key: SettingKey, settings: AppSettings): void {
 
 export function isCycleable(value: string): boolean {
   const cycleable: string[] = [
-    "htmlStyle",
     "addChapterTitles",
     "chapterTitleStyleTxt",
     "emDashToHyphen",
     "sanitizeWhitespace",
     "newlinesHandling",
-    "keepToc",
-    "splitChapters",
     "chapterFileNameStyle",
-    "includeImages",
-    "mdTocForChapters",
-    "indexTocForChapters",
-    "addBackLinkToChapters",
+    "md_splitChapters",
+    "md_keepToc",
+    "md_tocInChaptersFile",
+    "md_indexWithToc",
+    "md_addBackLink",
+    "md_addNextLink",
+    "md_addPrevLink",
+    "md_includeImages",
+    "html_splitChapters",
+    "html_keepToc",
+    "html_tocInChaptersFile",
+    "html_indexWithToc",
+    "html_addBackLink",
+    "html_addNextLink",
+    "html_addPrevLink",
+    "html_includeImages",
+    "html_style",
+    "json_splitChapters",
+    "json_includeImages",
   ];
   return cycleable.includes(value);
 }
@@ -199,12 +319,16 @@ export type SettingsListAction =
   | { type: "openOutputPath" }
   | { type: "openDefaultFormats" }
   | { type: "openTheme" }
+  | { type: "openManageHtmlStyles" }
+  | { type: "openChooseHtmlStyle" }
+  | { type: "openAppLanguage" }
+  | { type: "openExportLanguage" }
   | { type: "openCustomPrefix" }
   | { type: "restoreDefaults" }
   | { type: "none" };
 
 const SELECTION_MARGIN = 5;
-const SCROLLBAR_THUMB = "█";
+const SCROLLBAR_THUMB = "\u2588";
 const SCROLLBAR_TRACK = " ";
 
 function getScrollbarChar(
@@ -244,31 +368,33 @@ function getValueColumn(rows: SettingsRow[]): number {
   return max;
 }
 
-function formatSectionTitle(row: SettingsRow): string {
-  const innerWidth = getFrameWidth() - 4;
-  const afterBullet = innerWidth - 2;
+function formatSectionTitleRaw(row: SettingsRow, contentWidth: number): string {
+  const afterBullet = contentWidth - 2;
   const title = row.name.replace(/^—+\s*|\s*—+$/g, "").trim();
   const displayTitle = " " + title + " ";
   const spaceForDashes = afterBullet - displayTitle.length;
-  if (spaceForDashes <= 0) return styleSectionBold(row.name);
+  if (spaceForDashes <= 0) return row.name;
   const leftDashes = Math.floor(spaceForDashes / 2);
   const rightDashes = spaceForDashes - leftDashes;
-  const line = "─".repeat(leftDashes) + displayTitle + "─".repeat(rightDashes);
-  return styleSectionBold(line);
+  return "─".repeat(leftDashes) + displayTitle + "─".repeat(rightDashes);
 }
 
 function formatSettingsRow(
   row: SettingsRow,
   valueColumn: number,
   isSelected: boolean,
-  isSep: boolean
+  isSep: boolean,
+  contentWidth: number,
+  isActiveSection: boolean
 ): string {
   const bullet = isSelected ? "▸ " : "  ";
 
   if (isSep) {
-    return isSelected
-      ? styleSelectedRow(bullet + formatSectionTitle(row))
-      : bullet + formatSectionTitle(row);
+    const raw = formatSectionTitleRaw(row, contentWidth);
+    const styled = isActiveSection
+      ? styleSelectedRow(raw)
+      : styleSectionBold(raw);
+    return bullet + styled;
   }
   const idx = row.name.indexOf(": ");
   const labelPart = idx === -1 ? row.name : row.name.slice(0, idx + 2);
@@ -279,9 +405,16 @@ function formatSettingsRow(
   return isSelected ? styleSelectedRow(bullet + content) : bullet + content;
 }
 
+const SAVE_BEFORE_EXIT_CHOICES = [
+  { name: "Save", value: "save" },
+  { name: "Don't save", value: "discard" },
+  { name: "Cancel", value: "cancel" },
+] as const;
+
 export function promptSettingsList(
   settings: AppSettings,
-  getRows: () => SettingsRow[]
+  getRows: () => SettingsRow[],
+  initialSettings?: AppSettings
 ): Promise<SettingsListAction> {
   return new Promise((resolve) => {
     const pageSize = Math.max(5, getSelectPageSize() - DESCRIPTION_LINES - 2);
@@ -297,26 +430,31 @@ export function promptSettingsList(
       const visible = rows.slice(start, start + pageSize);
       const message = styleMessage("Settings (Esc to return to main menu)");
       const hint = styleHintTips(
-        " ↑/↓ move  Space/Tab cycle  Shift+Tab cycle back  Enter select  R restore defaults  Esc back"
+        " ↑/↓ move  ←/→ section  Space/Tab cycle  Enter select  R restore  Esc back"
       );
       const width = getFrameWidth();
+      const showScrollbar = rows.length > pageSize;
+      const innerWidth = Math.max(0, showScrollbar ? width - 5 : width - 4);
       const selectedRow = rows[index];
       const descriptionText = selectedRow
         ? getSettingDescription(selectedRow.value, settings)
         : "";
       const descriptionWrapped = wrapDescription(
         descriptionText,
-        Math.max(20, width - 4)
+        Math.max(20, innerWidth)
       ).slice(0, DESCRIPTION_LINES);
       const descriptionLines = descriptionWrapped.map((l) => styleHint(l));
-      const showScrollbar = rows.length > pageSize;
-      const innerWidth = Math.max(0, showScrollbar ? width - 5 : width - 4);
+      const valueColumnCapped = Math.min(valueColumn, innerWidth - 2);
+      const activeSectionHeaderIndex = indexOfActiveSectionHeader(rows, index);
       const rowLines: string[] = [];
       const rowLineToLogicalIndex: number[] = [];
       for (let i = 0; i < visible.length; i++) {
         const row = visible[i]!;
         const globalIndex = start + i;
         const isSelected = globalIndex === index;
+        const isActiveSection =
+          activeSectionHeaderIndex !== null &&
+          globalIndex === activeSectionHeaderIndex;
         if (row.value === "__done__") {
           rowLines.push("");
           rowLineToLogicalIndex.push(i);
@@ -339,7 +477,16 @@ export function promptSettingsList(
             row.value === "__sep3__" ||
             row.value === "__sep4__" ||
             row.value === "__sep5__";
-          rowLines.push(formatSettingsRow(row, valueColumn, isSelected, isSep));
+          rowLines.push(
+            formatSettingsRow(
+              row,
+              valueColumnCapped,
+              isSelected,
+              isSep,
+              innerWidth,
+              isActiveSection
+            )
+          );
           rowLineToLogicalIndex.push(i);
         }
       }
@@ -421,6 +568,25 @@ export function promptSettingsList(
       render();
     };
 
+    const skipToNextSection = (): void => {
+      const starts = getSectionStartIndices(rows);
+      if (starts.length === 0) return;
+      const nextStart = starts.find((s) => s > index);
+      index = nextStart !== undefined ? nextStart : starts[0]!;
+      render();
+    };
+
+    const skipToPrevSection = (): void => {
+      const starts = getSectionStartIndices(rows);
+      if (starts.length === 0) return;
+      const prevStarts = starts.filter((s) => s < index);
+      index =
+        prevStarts.length > 0
+          ? prevStarts[prevStarts.length - 1]!
+          : starts[starts.length - 1]!;
+      render();
+    };
+
     const cycleCurrent = (forward: boolean): void => {
       const row = rows[index];
       if (!row?.disabled && isCycleable(row.value)) {
@@ -431,15 +597,35 @@ export function promptSettingsList(
     };
 
     const onKeypress = (
-      _ch: unknown,
+      ch: unknown,
       key?: { name?: string; shift?: boolean; ctrl?: boolean }
     ): void => {
       if (key?.ctrl && key?.name === "c") {
         exitNicely();
       }
-      if (key?.name === "escape") {
+      if (key?.name === "escape" || ch === "\x1b") {
+        if (!initialSettings || settingsEqual(settings, initialSettings)) {
+          cleanup();
+          resolve({ type: "cancel" });
+          return;
+        }
         cleanup();
-        resolve({ type: "cancel" });
+        promptFramedSelect(
+          "You have unsaved changes. Save before exiting?",
+          [...SAVE_BEFORE_EXIT_CHOICES],
+          "Enter select  Esc cancel",
+          0
+        ).then((result) => {
+          if (result === "save") {
+            resolve({ type: "done" });
+          } else if (result === "discard" || result === null) {
+            resolve({ type: "cancel" });
+          } else {
+            promptSettingsList(settings, getRows, initialSettings).then(
+              resolve
+            );
+          }
+        });
         return;
       }
       if (key?.name === "up" || key?.name === "k") {
@@ -464,6 +650,14 @@ export function promptSettingsList(
       }
       if (key?.name === "end") {
         goEnd();
+        return;
+      }
+      if (key?.name === "right" || key?.name === "l") {
+        skipToNextSection();
+        return;
+      }
+      if (key?.name === "left" || key?.name === "h") {
+        skipToPrevSection();
         return;
       }
       if (key?.name === "r" && !key?.ctrl && !key?.shift) {
@@ -502,6 +696,26 @@ export function promptSettingsList(
         if (row.value === "theme") {
           cleanup();
           resolve({ type: "openTheme" });
+          return;
+        }
+        if (row.value === "app_language") {
+          cleanup();
+          resolve({ type: "openAppLanguage" });
+          return;
+        }
+        if (row.value === "export_language") {
+          cleanup();
+          resolve({ type: "openExportLanguage" });
+          return;
+        }
+        if (row.value === "html_styles") {
+          cleanup();
+          resolve({ type: "openManageHtmlStyles" });
+          return;
+        }
+        if (row.value === "html_style_theme") {
+          cleanup();
+          resolve({ type: "openChooseHtmlStyle" });
           return;
         }
         if (row.value === "chapterFileNameCustomPrefix") {

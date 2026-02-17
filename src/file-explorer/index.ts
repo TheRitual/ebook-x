@@ -6,18 +6,24 @@ import { promptFramedSelectLoop } from "../menus/framed-select.js";
 import {
   promptSplitFilePicker,
   type SplitFilePickerResult,
+  type SplitFilePickerState,
 } from "./split-file-picker.js";
+import { getDefaultIncludeImages } from "./utils/default-include-images.js";
 import { promptPerFileSettings } from "./per-file-settings-prompt.js";
 import type { SelectedFile } from "./selected-file-types.js";
+import type { AppSettings } from "../settings/types.js";
 
 export type FileSelectionResult = SelectedFile[] | null | "settings";
+export type { SplitFilePickerState } from "./split-file-picker.js";
 
 const FILE_HINT = " ↑/↓ move  Enter select  Esc cancel  Ctrl/Cmd+S settings";
 
 export async function promptSelectEpubFiles(
-  startDir: string
+  startDir: string,
+  initialState?: Partial<SplitFilePickerState>,
+  settings?: AppSettings
 ): Promise<FileSelectionResult> {
-  let state: import("./split-file-picker.js").SplitFilePickerState | undefined;
+  let state: Partial<SplitFilePickerState> | undefined = initialState;
 
   for (;;) {
     const result = await promptSplitFilePicker(startDir, state);
@@ -30,9 +36,13 @@ export async function promptSelectEpubFiles(
       const existingBasenames = edit.selected
         .map((s) => s.outputBasename)
         .filter((_, i) => i !== edit.index);
+      const defaultIncludeImages = settings
+        ? getDefaultIncludeImages(settings, settings.defaultFormats)
+        : false;
       const updated = await promptPerFileSettings(
         edit.selected[edit.index]!,
-        existingBasenames
+        existingBasenames,
+        defaultIncludeImages
       );
       const newSelected = [...edit.selected];
       newSelected[edit.index] = updated;

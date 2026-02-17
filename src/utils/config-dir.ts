@@ -18,3 +18,7 @@ export function getConfigDir(): string {
 export function getThemesDir(): string {
   return path.join(getConfigDir(), "themes");
 }
+
+export function getHtmlStylesDir(): string {
+  return path.join(getConfigDir(), "html-styles");
+}

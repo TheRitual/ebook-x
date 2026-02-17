@@ -99,7 +99,7 @@
         "title": { "type": "string", "description": "Chapter title" },
         "content": {
           "type": "string",
-          "description": "Plain text content; may contain {{img_<uuid>}} placeholders"
+          "description": "Plain text content; may contain ${{img_<uuid>}} placeholders when images are extracted"
         },
         "file": {
           "type": "string",
@@ -113,7 +113,7 @@
       "properties": {
         "url": {
           "type": "string",
-          "description": "Path to image file relative to book directory (e.g. __IMG__/filename.png)"
+          "description": "Path to image file relative to main JSON file (e.g. __img__/filename.png)"
         }
       }
     }

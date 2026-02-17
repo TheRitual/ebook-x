@@ -110,11 +110,11 @@ export async function promptChapterSelection(
     };
 
     const onKeypress = (
-      _ch: unknown,
+      ch: unknown,
       key?: { name?: string; ctrl?: boolean }
     ): void => {
       if (key?.ctrl && key?.name === "c") exitNicely();
-      if (key?.name === "escape") {
+      if (key?.name === "escape" || ch === "\x1b") {
         cleanup();
         resolve(currentIndices);
         return;
@@ -203,10 +203,27 @@ function formatPerFileRow(row: PerFileRow, isCur: boolean): string {
   return isCur ? styleSelectedRow(content) : content;
 }
 
+function cycleIncludeImages(current: boolean | undefined): boolean | undefined {
+  if (current === undefined) return true;
+  if (current === true) return false;
+  return undefined;
+}
+
+function formatIncludeImagesValue(
+  value: boolean | undefined,
+  defaultIncludeImages: boolean
+): string {
+  if (value === undefined)
+    return `Default (${defaultIncludeImages ? "Yes" : "No"})`;
+  return value ? "Yes" : "No";
+}
+
 export async function promptPerFileSettings(
   file: SelectedFile,
-  existingBasenames: string[]
+  existingBasenames: string[],
+  defaultIncludeImages: boolean = false
 ): Promise<SelectedFile> {
+  const defaultImg = defaultIncludeImages;
   const result = { ...file };
   const otherBasenames = existingBasenames.filter(
     (b) => b !== file.outputBasename
@@ -223,7 +240,7 @@ export async function promptPerFileSettings(
     },
     {
       name: "Extract images",
-      value: result.includeImages ? "Yes" : "No",
+      value: formatIncludeImagesValue(result.includeImages, defaultImg),
       cycle: true,
     },
     { name: "Done", value: "" },
@@ -257,11 +274,11 @@ export async function promptPerFileSettings(
       };
 
       const onKeypress = (
-        _ch: unknown,
+        ch: unknown,
         key?: { name?: string; ctrl?: boolean; shift?: boolean }
       ): void => {
         if (key?.ctrl && key?.name === "c") exitNicely();
-        if (key?.name === "escape") {
+        if (key?.name === "escape" || ch === "\x1b") {
           cleanup();
           resolve(-1);
           return;
@@ -269,7 +286,7 @@ export async function promptPerFileSettings(
         if (key?.name === "space" || (key?.name === "tab" && !key?.shift)) {
           const row = getRows()[index];
           if (row?.cycle) {
-            result.includeImages = !result.includeImages;
+            result.includeImages = cycleIncludeImages(result.includeImages);
             render();
           }
           return;
@@ -277,7 +294,7 @@ export async function promptPerFileSettings(
         if (key?.name === "tab" && key?.shift) {
           const row = getRows()[index];
           if (row?.cycle) {
-            result.includeImages = !result.includeImages;
+            result.includeImages = cycleIncludeImages(result.includeImages);
             render();
           }
           return;
@@ -358,7 +375,7 @@ export async function promptPerFileSettings(
       );
     }
     if (choice === 2) {
-      result.includeImages = !result.includeImages;
+      result.includeImages = cycleIncludeImages(result.includeImages);
     }
   }
 }

@@ -18,7 +18,11 @@
     "test:example": "vitest run example-book",
     "test:watch": "vitest",
     "prepare": "husky",
-    "release": "semantic-release"
+    "release": "semantic-release",
+    "eXepub2txt": "node scripts/run-extract.mjs txt",
+    "eXepub2md": "node scripts/run-extract.mjs md",
+    "eXepub2html": "node scripts/run-extract.mjs html",
+    "eXepub2json": "node scripts/run-extract.mjs json"
   },
   "license": "MIT",
   "engines": {
@@ -47,12 +51,26 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.16.0",
     "vite": "^6.0.3",
-    "vitest": "^2.1.6"
+    "vitest": "^2.1.6",
+    "@yao-pkg/pkg": "^6.13.1"
   },
   "lint-staged": {
     "*.{ts,js,json,md}": [
       "prettier --write",
       "eslint --fix"
     ]
+  },
+  "pkg": {
+    "scripts": [
+      "dist/**/*"
+    ],
+    "assets": [
+      "node_modules/**/*"
+    ]
+  },
+  "main": "./dist/lib.js",
+  "exports": {
+    ".": "./dist/lib.js",
+    "./package.json": "./package.json"
   }
 }

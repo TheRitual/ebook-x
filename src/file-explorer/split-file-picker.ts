@@ -99,7 +99,7 @@ export async function promptSplitFilePicker(
 
   return new Promise((resolve) => {
     const onKeypress = (
-      _ch: unknown,
+      ch: unknown,
       key?: { name?: string; ctrl?: boolean; meta?: boolean }
     ): void => {
       if (key?.ctrl && key?.name === "c") {
@@ -114,7 +114,7 @@ export async function promptSplitFilePicker(
         resolve("settings");
         return;
       }
-      if (key?.name === "escape") {
+      if (key?.name === "escape" || ch === "\x1b") {
         cleanup();
         resolve(null);
         return;
@@ -151,7 +151,6 @@ export async function promptSplitFilePicker(
               path: entry.path,
               outputBasename,
               chapterIndices: null,
-              includeImages: false,
             });
             cleanup();
             resolve([...selected]);
@@ -191,7 +190,6 @@ export async function promptSplitFilePicker(
               path: entry.path,
               outputBasename,
               chapterIndices: null,
-              includeImages: false,
             });
           }
         } else if (
@@ -243,8 +241,8 @@ export async function promptSplitFilePicker(
             index: rightIndex,
             state: { currentDir, leftIndex, rightIndex, leftActive },
           });
-          return;
         }
+        return;
       }
       if (key?.name === "up" || key?.name === "k") {
         if (leftActive) {

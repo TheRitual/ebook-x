@@ -2,13 +2,16 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   build: {
-    ssr: "src/cli.ts",
+    ssr: true,
     outDir: "dist",
     emptyOutDir: true,
     rollupOptions: {
-      input: "src/cli.ts",
+      input: {
+        cli: "src/cli.ts",
+        lib: "src/lib/index.ts",
+      },
       output: {
-        entryFileNames: "cli.js",
+        entryFileNames: "[name].js",
         format: "es",
       },
     },

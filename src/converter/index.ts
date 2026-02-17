@@ -30,23 +30,23 @@ import {
   extractBodyInnerHtml,
 } from "./utils.js";
 import {
-  buildThemedHtmlDocument,
+  buildStyledHtmlDocument,
   buildMinimalHtmlDocument,
-  getDefaultHtmlTheme,
 } from "./utils/html-document.js";
+import { loadHtmlStyle } from "../html-styles/index.js";
+import { getExportT } from "../i18n/index.js";
+import type { LocaleId } from "../i18n/types.js";
 
 function wrapHtmlBody(content: string, options: ConvertOptions): string {
   const style = options.htmlStyle ?? "none";
   if (style === "none") return buildMinimalHtmlDocument(content);
-  const theme =
-    style === "custom" && options.htmlTheme
-      ? options.htmlTheme
-      : getDefaultHtmlTheme();
-  return buildThemedHtmlDocument(content, theme);
+  const styleDef = loadHtmlStyle(options.htmlStyleId ?? "default");
+  if (!styleDef) return buildMinimalHtmlDocument(content);
+  return buildStyledHtmlDocument(content, styleDef);
 }
 
 const DEFAULT_OUTPUT_DIR = "output";
-const IMG_SUBDIR = "__IMG__";
+const IMG_SUBDIR = "__img__";
 const CHAPTERS_DIR = "chapters";
 
 function getChapterFileName(
@@ -90,6 +90,22 @@ function resolveChapterRelative(baseHref: string, imgSrc: string): string {
   return path.normalize(joined).replace(/\\/g, "/");
 }
 
+function pathWithoutFirstSegment(p: string): string {
+  const parts = p.replace(/\\/g, "/").split("/").filter(Boolean);
+  return parts.length > 1 ? parts.slice(1).join("/") : p;
+}
+
+function manifestIdForImage(
+  resolved: string,
+  hrefToId: Map<string, string>
+): string | undefined {
+  return (
+    hrefToId.get(resolved) ??
+    hrefToId.get(pathWithoutFirstSegment(resolved)) ??
+    hrefToId.get(path.basename(resolved))
+  );
+}
+
 function extractImgSrcs(html: string): string[] {
   const srcs: string[] = [];
   const re = /<img[^>]+src\s*=\s*["']([^"']+)["']/gi;
@@ -114,13 +130,18 @@ function rewriteMarkdownImageUrls(
 }
 
 function imagePathsForChapterFile(md: string): string {
-  return md.replace(/\]\(\s*__IMG__\//g, "](../__IMG__/");
+  const esc = IMG_SUBDIR.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return md.replace(
+    new RegExp(`\\]\\(\\s*${esc}/`, "g"),
+    `](../${IMG_SUBDIR}/`
+  );
 }
 
 function imagePathsForChapterFileHtml(html: string): string {
+  const esc = IMG_SUBDIR.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return html
-    .replace(/src="__IMG__\//g, 'src="../__IMG__/')
-    .replace(/src='__IMG__\//g, "src='../__IMG__/");
+    .replace(new RegExp(`src="${esc}/`, "g"), `src="../${IMG_SUBDIR}/`)
+    .replace(new RegExp(`src='${esc}/`, "g"), `src='../${IMG_SUBDIR}/`);
 }
 
 function headerToAnchorSlug(headerText: string): string {
@@ -232,8 +253,10 @@ export async function convertEpub(
   format: ConvertFormat,
   options: ConvertOptions,
   outputDir: string,
-  formatSubdir?: string
+  formatSubdir?: string,
+  flatOutput?: boolean
 ): Promise<ConvertResult> {
+  const exportT = getExportT((options.exportLocale ?? "en") as LocaleId);
   const epub = await EPub.createAsync(epubPath);
   const flow = epub.flow;
   const chapterIndicesSet =
@@ -251,9 +274,11 @@ export async function convertEpub(
 
   const safeBasename = sanitizeOutputBasename(outputBasename);
   const bookDir =
-    formatSubdir !== undefined
-      ? path.join(outputDir, safeBasename, formatSubdir)
-      : path.join(outputDir, safeBasename);
+    flatOutput === true
+      ? path.resolve(outputDir)
+      : formatSubdir !== undefined
+        ? path.join(outputDir, safeBasename, formatSubdir)
+        : path.join(outputDir, safeBasename);
   fs.mkdirSync(bookDir, { recursive: true });
 
   if (format === "json") {
@@ -287,6 +312,8 @@ export async function convertEpub(
         if (href && isImageManifestItem(href, mt)) {
           const norm = path.normalize(href).replace(/\\/g, "/");
           hrefToIdJson.set(norm, id);
+          const withoutFirst = pathWithoutFirstSegment(norm);
+          if (withoutFirst !== norm) hrefToIdJson.set(withoutFirst, id);
         }
       }
     }
@@ -300,7 +327,9 @@ export async function convertEpub(
       const raw = await epub.getChapterRawAsync(id);
       let bodyHtml = extractBodyInnerHtml(raw);
       bodyHtml = decodeHtmlEntities(bodyHtml);
-      if (options.includeImages && hrefToIdJson && imgDirJson) {
+      if (!options.includeImages) {
+        bodyHtml = bodyHtml.replace(/<img[^>]*>/gi, "");
+      } else if (hrefToIdJson && imgDirJson) {
         const chapterHref = chapter?.href ?? "";
         const imgTagRe = /<img[^>]+src\s*=\s*["']([^"']+)["'][^>]*>/gi;
         const matches: { full: string; src: string; index: number }[] = [];
@@ -311,9 +340,9 @@ export async function convertEpub(
         for (let k = matches.length - 1; k >= 0; k--) {
           const { full, src } = matches[k]!;
           const resolved = resolveChapterRelative(chapterHref, src);
-          const manifestId =
-            hrefToIdJson.get(resolved) ??
-            hrefToIdJson.get(path.basename(resolved));
+          const manifestId = hrefToIdJson
+            ? manifestIdForImage(resolved, hrefToIdJson)
+            : undefined;
           if (!manifestId) continue;
           let imgId = manifestIdToImgId.get(manifestId);
           if (!imgId) {
@@ -334,7 +363,7 @@ export async function convertEpub(
           }
           bodyHtml =
             bodyHtml.slice(0, matches[k]!.index) +
-            `{{${imgId}}}` +
+            `\${{${imgId}}}` +
             bodyHtml.slice(matches[k]!.index + full.length);
         }
       }
@@ -345,7 +374,8 @@ export async function convertEpub(
         newlinesHandling: options.newlinesHandling,
       });
       const chapterNum = chapters.length + 1;
-      const title = (chapter?.title?.trim() ?? "") || `Chapter ${chapterNum}`;
+      const title =
+        (chapter?.title?.trim() ?? "") || exportT.formatChapter(chapterNum);
       chapters.push({
         id: chapterId,
         index: chapterNum,
@@ -453,6 +483,8 @@ export async function convertEpub(
     if (href && isImageManifestItem(href, mt)) {
       const norm = path.normalize(href).replace(/\\/g, "/");
       hrefToId.set(norm, id);
+      const withoutFirst = pathWithoutFirstSegment(norm);
+      if (withoutFirst !== norm) hrefToId.set(withoutFirst, id);
     }
   }
 
@@ -479,8 +511,8 @@ export async function convertEpub(
     if (tocLines.length) {
       parts.push(
         format === "md"
-          ? "## Table of contents\n\n" + tocLines.join("\n")
-          : "Table of contents\n\n" + tocLines.join("\n")
+          ? `## ${exportT.tableOfContents}\n\n` + tocLines.join("\n")
+          : `${exportT.tableOfContents}\n\n` + tocLines.join("\n")
       );
     }
   }
@@ -503,8 +535,7 @@ export async function convertEpub(
       const srcs = extractImgSrcs(raw);
       for (const src of srcs) {
         const resolved = resolveChapterRelative(chapterHref, src);
-        const manifestId =
-          hrefToId.get(resolved) ?? hrefToId.get(path.basename(resolved));
+        const manifestId = manifestIdForImage(resolved, hrefToId);
         if (manifestId) {
           let newRel = savedImages.get(manifestId);
           if (!newRel) {
@@ -531,7 +562,9 @@ export async function convertEpub(
     if (format === "html") {
       content = extractBodyInnerHtml(raw);
       content = decodeHtmlEntities(content);
-      if (options.includeImages && srcToNewPath.size) {
+      if (!options.includeImages) {
+        content = content.replace(/<img[^>]*>/gi, "");
+      } else if (srcToNewPath.size) {
         for (const [src, newPath] of srcToNewPath) {
           const esc = src.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
           content = content.replace(
@@ -541,7 +574,7 @@ export async function convertEpub(
         }
       }
       if (options.addChapterTitles) {
-        const titleLine = `<h3>Chapter ${chapterNum}${chapterTitle ? ` - ${chapterTitle}` : ""}</h3>`;
+        const titleLine = `<h3>${exportT.formatChapter(chapterNum, chapterTitle)}</h3>`;
         content = titleLine + "\n\n" + content;
       }
     } else {
@@ -561,12 +594,12 @@ export async function convertEpub(
       if (options.addChapterTitles) {
         const titleLine =
           format === "md"
-            ? `### Chapter ${chapterNum}${chapterTitle ? ` - ${chapterTitle}` : ""}`
+            ? `### ${exportT.formatChapter(chapterNum, chapterTitle)}`
             : options.chapterTitleStyleTxt === "inline"
-              ? `Chapter ${chapterNum}${chapterTitle ? ` - ${chapterTitle}` : ""}`
+              ? exportT.formatChapter(chapterNum, chapterTitle)
               : chapterTitle
-                ? `Chapter ${chapterNum}\n\n${chapterTitle}`
-                : `Chapter ${chapterNum}`;
+                ? `${exportT.formatChapter(chapterNum)}\n\n${chapterTitle}`
+                : exportT.formatChapter(chapterNum);
         content = titleLine + "\n\n" + content;
       }
     }
@@ -584,17 +617,6 @@ export async function convertEpub(
     const chaptersDir = path.join(bookDir, CHAPTERS_DIR);
     fs.mkdirSync(chaptersDir, { recursive: true });
 
-    const indexLink =
-      format === "md" &&
-      options.indexTocForChapters &&
-      options.addBackLinkToChapters
-        ? `\n\n[← Back to index](../${safeBasename}.md)\n`
-        : "";
-    const indexLinkHtml =
-      format === "html" && options.addBackLinkToChapters
-        ? `\n<p><a href="../${safeBasename}.html">← Back to index</a></p>\n`
-        : "";
-
     for (let i = 0; i < parts.length; i++) {
       const chapterNum = i + 1;
       const fileName = getChapterFileName(
@@ -605,13 +627,55 @@ export async function convertEpub(
       );
       const chapterPath = path.join(chaptersDir, fileName);
       let chapterContent = parts[i]!;
+
+      const prevFileName =
+        i > 0 && options.addPrevLinkToChapters
+          ? getChapterFileName(safeBasename, i, options, ext)
+          : null;
+      const nextFileName =
+        i < parts.length - 1 && options.addNextLinkToChapters
+          ? getChapterFileName(safeBasename, chapterNum + 1, options, ext)
+          : null;
+      const tocLinkMd =
+        format === "md" &&
+        options.indexTocForChapters &&
+        options.addBackLinkToChapters
+          ? `[${exportT.tocLink}](../${safeBasename}.md)`
+          : "";
+      const tocLinkHtml =
+        format === "html" && options.addBackLinkToChapters
+          ? `<a class="chapter-nav-link" href="../${safeBasename}.html">${exportT.tocLink}</a>`
+          : "";
+
       if (format === "md") {
         chapterContent = imagePathsForChapterFile(chapterContent);
-        if (indexLink) chapterContent = chapterContent + indexLink;
+        const navParts: string[] = [];
+        if (prevFileName)
+          navParts.push(`[${exportT.previous}](${prevFileName})`);
+        if (tocLinkMd) navParts.push(tocLinkMd);
+        if (nextFileName) navParts.push(`[${exportT.next}](${nextFileName})`);
+        if (navParts.length)
+          chapterContent =
+            chapterContent + "\n\n" + navParts.join(" | ") + "\n";
       }
       if (format === "html") {
         chapterContent = imagePathsForChapterFileHtml(chapterContent);
-        if (indexLinkHtml) chapterContent = chapterContent + indexLinkHtml;
+        const navParts: string[] = [];
+        if (prevFileName)
+          navParts.push(
+            `<a class="chapter-nav-link" href="${prevFileName}">${exportT.previous}</a>`
+          );
+        if (tocLinkHtml) navParts.push(tocLinkHtml);
+        if (nextFileName)
+          navParts.push(
+            `<a class="chapter-nav-link" href="${nextFileName}">${exportT.next}</a>`
+          );
+        if (navParts.length)
+          chapterContent =
+            chapterContent +
+            '\n<p class="chapter-nav">' +
+            navParts.join(" | ") +
+            "</p>\n";
         chapterContent = chapterContent + getExtractionFooter("html");
         const wrapped = wrapHtmlBody(chapterContent, options);
         fs.writeFileSync(chapterPath, wrapped, "utf-8");
@@ -629,10 +693,10 @@ export async function convertEpub(
           options,
           ".md"
         );
-        return `- [Chapter ${e.index}${e.title ? ` - ${e.title}` : ""}](${CHAPTERS_DIR}/${fileName})`;
+        return `- [${exportT.formatChapter(e.index, e.title)}](${CHAPTERS_DIR}/${fileName})`;
       });
       const indexBody =
-        "## Table of contents\n\n" +
+        `## ${exportT.tableOfContents}\n\n` +
         chapterLines.join("\n") +
         "\n" +
         getExtractionFooter("md");
@@ -646,10 +710,10 @@ export async function convertEpub(
           options,
           ".html"
         );
-        return `<li><a href="${CHAPTERS_DIR}/${fileName}">Chapter ${e.index}${e.title ? ` - ${e.title}` : ""}</a></li>`;
+        return `<li><a class="toc-link" href="${CHAPTERS_DIR}/${fileName}">${exportT.formatChapter(e.index, e.title)}</a></li>`;
       });
       const indexBody =
-        "<h2>Table of contents</h2>\n<ul>\n" +
+        `<h2>${exportT.tableOfContents}</h2>\n<ul>\n` +
         chapterLines.join("\n") +
         "\n</ul>\n" +
         getExtractionFooter("html");
@@ -660,23 +724,23 @@ export async function convertEpub(
     let body = parts.join("\n\n");
     if (format === "md" && options.mdTocForChapters && tocEntries.length) {
       const tocLines = tocEntries.map((e) => {
-        const label = `Chapter ${e.index}${e.title ? ` - ${e.title}` : ""}`;
-        const headerText = `Chapter ${e.index}${e.title ? ` - ${e.title}` : ""}`;
+        const label = exportT.formatChapter(e.index, e.title);
+        const headerText = exportT.formatChapter(e.index, e.title);
         const slug = headerToAnchorSlug(headerText);
         return `- [${label}](#${slug})`;
       });
-      const tocMd = "## Table of contents\n\n" + tocLines.join("\n");
+      const tocMd = `## ${exportT.tableOfContents}\n\n` + tocLines.join("\n");
       body = tocMd + "\n\n" + body;
     }
     if (format === "html" && options.mdTocForChapters && tocEntries.length) {
       const tocLines = tocEntries.map((e) => {
-        const label = `Chapter ${e.index}${e.title ? ` - ${e.title}` : ""}`;
-        const headerText = `Chapter ${e.index}${e.title ? ` - ${e.title}` : ""}`;
+        const label = exportT.formatChapter(e.index, e.title);
+        const headerText = exportT.formatChapter(e.index, e.title);
         const slug = headerToAnchorSlug(headerText);
-        return `<li><a href="#${slug}">${label}</a></li>`;
+        return `<li><a class="toc-link" href="#${slug}">${label}</a></li>`;
       });
       body =
-        "<h2>Table of contents</h2>\n<ul>\n" +
+        `<h2 class="toc-title">${exportT.tableOfContents}</h2>\n<ul class="toc-list">\n` +
         tocLines.join("\n") +
         "\n</ul>\n\n" +
         body;

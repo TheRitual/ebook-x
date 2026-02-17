@@ -18,6 +18,8 @@ describe("defaultConvertOptions", () => {
       "chapterFileNameCustomPrefix",
       "indexTocForChapters",
       "addBackLinkToChapters",
+      "addNextLinkToChapters",
+      "addPrevLinkToChapters",
     ];
     for (const key of required) {
       expect(key in defaultConvertOptions).toBe(true);

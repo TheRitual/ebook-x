@@ -1,0 +1,147 @@
+name: Build release assets
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  validate:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+  build-windows:
+    name: Windows x64
+    runs-on: windows-latest
+    needs: [validate]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run build
+      - run: npx pkg . -t node20-win-x64 -o ebook-x
+      - run: |
+          $version = "${{ github.event.release.tag_name }}".TrimStart('v')
+          Move-Item -Path ebook-x-win-x64.exe -Destination "ebook-x-$version-win-x64.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: "ebook-x-*-win-x64.exe"
+
+  build-macos:
+    name: macOS
+    runs-on: macos-latest
+    needs: [validate]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run build
+      - run: npx pkg . -t node20-macos-x64,node20-macos-arm64 -o ebook-x
+      - run: |
+          version="${{ github.event.release.tag_name }}"
+          version="${version#v}"
+          mv ebook-x-macos-x64 "ebook-x-${version}-darwin-x64"
+          mv ebook-x-macos-arm64 "ebook-x-${version}-darwin-arm64"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            ebook-x-*-darwin-x64
+            ebook-x-*-darwin-arm64
+
+  build-linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    needs: [validate]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run build
+      - run: npx pkg . -t node20-linux-x64 -o ebook-x
+      - run: |
+          version="${{ github.event.release.tag_name }}"
+          version="${version#v}"
+          mv ebook-x-linux-x64 "ebook-x-${version}-linux-x64"
+          chmod +x "ebook-x-${version}-linux-x64"
+      - name: Install nfpm
+        run: |
+          curl -sSfL https://github.com/goreleaser/nfpm/releases/download/v2.36.2/nfpm_2.36.2_amd64.deb -o nfpm.deb
+          sudo dpkg -i nfpm.deb
+      - name: Create deb and rpm
+        run: |
+          version="${{ github.event.release.tag_name }}"
+          version="${version#v}"
+          mkdir -p pkg/usr/bin
+          cp "ebook-x-${version}-linux-x64" pkg/usr/bin/ebook-x
+          sed "s/{{VERSION}}/${version}/g" .github/nfpm.yaml > nfpm.yaml
+          nfpm pkg -f nfpm.yaml -t "ebook-x_${version}_amd64.deb" -p deb
+          nfpm pkg -f nfpm.yaml -t "ebook-x-${version}.x86_64.rpm" -p rpm
+      - name: Build AppImage
+        run: |
+          version="${{ github.event.release.tag_name }}"
+          version="${version#v}"
+          mkdir -p AppDir/usr/bin
+          cp "ebook-x-${version}-linux-x64" AppDir/usr/bin/ebook-x
+          chmod +x AppDir/usr/bin/ebook-x
+          printf '[Desktop Entry]\nType=Application\nName=ebook-x\nExec=ebook-x %%F\nCategories=Utility;\n' > AppDir/ebook-x.desktop
+          ln -s usr/bin/ebook-x AppDir/AppRun
+          curl -sSfL https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage -o appimagetool
+          chmod +x appimagetool
+          ARCH=x86_64 ./appimagetool AppDir "ebook-x-${version}-x86_64.AppImage"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            ebook-x-*-linux-x64
+            ebook-x_*_amd64.deb
+            ebook-x-*.x86_64.rpm
+            ebook-x-*-x86_64.AppImage
+
+  upload-release:
+    name: Upload to release
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-macos, build-linux]
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: artifacts/*
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

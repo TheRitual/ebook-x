@@ -64,11 +64,11 @@ export function promptOutputFormatsMulti(
     };
 
     const onKeypress = (
-      _ch: unknown,
+      ch: unknown,
       key?: { name?: string; ctrl?: boolean }
     ): void => {
       if (key?.ctrl && key?.name === "c") exitNicely();
-      if (key?.name === "escape") {
+      if (key?.name === "escape" || ch === "\x1b") {
         cleanup();
         resolve(null);
         return;

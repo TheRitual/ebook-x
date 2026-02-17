@@ -22,6 +22,10 @@ function stripAnsi(s: string): string {
   return s.replace(/\x1b\[[\d;]*m/g, "");
 }
 
+export function getPlainLength(str: string): number {
+  return stripAnsi(str).length;
+}
+
 export function truncateToPlainLength(str: string, maxPlain: number): string {
   const plain = stripAnsi(str);
   if (plain.length <= maxPlain) return str;
@@ -36,6 +40,37 @@ export function truncateToPlainLength(str: string, maxPlain: number): string {
       continue;
     }
     result += str[i];
+    count++;
+    i++;
+  }
+  const reset = "\x1b[0m";
+  return result + (result.endsWith(reset) ? "" : reset);
+}
+
+export function sliceByPlainRange(
+  str: string,
+  start: number,
+  length: number
+): string {
+  const plain = stripAnsi(str);
+  if (start >= plain.length || length <= 0) return "";
+  const end = Math.min(start + length, plain.length);
+  let count = 0;
+  let collect = 0;
+  let result = "";
+  let i = 0;
+  while (i < str.length && collect < end - start) {
+    if (str[i] === "\x1b" && str[i + 1] === "[") {
+      const m = str.indexOf("m", i + 2);
+      const seq = m === -1 ? str[i]! : str.slice(i, m + 1);
+      if (count >= start) result += seq;
+      i = m === -1 ? i + 1 : m + 1;
+      continue;
+    }
+    if (count >= start) {
+      result += str[i];
+      collect++;
+    }
     count++;
     i++;
   }

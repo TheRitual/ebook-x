@@ -6,15 +6,7 @@ export type NewlinesHandling = "keep" | "one" | "two";
 
 export type ChapterFileNameStyle = "same" | "chapter" | "custom";
 
-export type HtmlStyle = "none" | "styled" | "custom";
-
-export interface HtmlTheme {
-  background: string;
-  text: string;
-  headingColor: string;
-  headingFont: string;
-  bodyFont: string;
-}
+export type HtmlStyle = "none" | "styled";
 
 export interface ConvertOptions {
   chapterIndices?: number[] | null;
@@ -31,8 +23,11 @@ export interface ConvertOptions {
   chapterFileNameCustomPrefix: string;
   indexTocForChapters: boolean;
   addBackLinkToChapters: boolean;
+  addNextLinkToChapters: boolean;
+  addPrevLinkToChapters: boolean;
   htmlStyle?: HtmlStyle;
-  htmlTheme?: HtmlTheme;
+  htmlStyleId?: string;
+  exportLocale?: string;
 }
 
 export interface EpubChapterInfo {

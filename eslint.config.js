@@ -4,5 +4,9 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
-  { ignores: ["dist/", "node_modules/", "**/*.cjs"] }
+  { ignores: ["dist/", "node_modules/", "**/*.cjs"] },
+  {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { globals: { process: "readonly", console: "readonly" } },
+  }
 );

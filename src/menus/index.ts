@@ -1,23 +1,54 @@
 import { input } from "@inquirer/prompts";
-import type { MainMenuAction, OutputFormat } from "./types.js";
+import type {
+  MainMenuAction,
+  OutputFormat,
+  AfterFileSelectionAction,
+} from "./types.js";
 import { clearScreen, getFrameWidth, frameMessage } from "./utils.js";
 import { inquirerTheme } from "./colors.js";
-import { promptFramedSelect } from "./framed-select.js";
+import {
+  promptFramedSelect,
+  promptScrollableContent,
+} from "./framed-select.js";
+import { getConfigDir } from "../utils/config-dir.js";
+import { t } from "../i18n/index.js";
 
 export { promptFramedSelect } from "./framed-select.js";
 
-const FRAMED_HINT = " ↑/↓ move  Enter select  Esc back";
+function buildHowToContent(): string[] {
+  const configDir = getConfigDir();
+  const width = Math.min(getFrameWidth() - 6, 72);
+  const wrap = (s: string): string =>
+    s.length <= width ? s : s.slice(0, width - 1) + "…";
+  return [
+    ...t("howto_nav"),
+    "",
+    t("howto_where_header"),
+    t("howto_config_prefix") + wrap(configDir),
+    t("howto_output_line"),
+  ];
+}
+
+export async function promptHowTo(): Promise<void> {
+  clearScreen();
+  await promptScrollableContent(
+    t("howto_title"),
+    () => buildHowToContent(),
+    t("hint_scroll")
+  );
+}
 
 export async function promptMainMenu(): Promise<MainMenuAction> {
   clearScreen();
   const value = await promptFramedSelect(
-    "What do you want to do?",
+    t("menu_whatToDo"),
     [
-      { name: "Convert an EPUB file", value: "convert" },
-      { name: "Settings", value: "settings" },
-      { name: "Exit", value: "exit" },
+      { name: t("menu_convert"), value: "convert" },
+      { name: t("menu_settings"), value: "settings" },
+      { name: t("menu_howto"), value: "howto" },
+      { name: t("menu_exit"), value: "exit" },
     ],
-    " ↑/↓ move  Enter select  Esc exit"
+    t("hint_exit")
   );
   return (value ?? "exit") as MainMenuAction;
 }
@@ -42,14 +73,14 @@ export async function promptOutputFormat(
 ): Promise<OutputFormat> {
   clearScreen();
   const value = await promptFramedSelect(
-    "Output format",
+    t("output_format"),
     [
-      { name: "Plain text (.txt)", value: "txt" },
-      { name: "Markdown (.md)", value: "md" },
-      { name: "JSON (.json)", value: "json" },
-      { name: "HTML (.html)", value: "html" },
+      { name: t("format_txt"), value: "txt" },
+      { name: t("format_md"), value: "md" },
+      { name: t("format_json"), value: "json" },
+      { name: t("format_html"), value: "html" },
     ],
-    FRAMED_HINT,
+    t("hint_moveSelect"),
     outputFormatDefaultIndex(defaultFormat)
   );
   return (value ?? "txt") as OutputFormat;
@@ -84,12 +115,13 @@ function buildSuccessContentLines(result: SuccessScreenResult): string[] {
     result.outputDir.length <= maxPath
       ? result.outputDir
       : "…" + result.outputDir.slice(-maxPath + 1);
+  const chLabel = t("success_chapters");
   return [
     "",
-    "📚  Your book has been successfully converted.",
+    "📚  " + t("success_converted"),
     "",
     `  ${pathDisplay}`,
-    `  ${result.totalChapters} chapter${result.totalChapters === 1 ? "" : "s"} extracted`,
+    `  ${result.totalChapters} ${chLabel}${result.totalChapters === 1 ? "" : "s"} extracted`,
     "",
     pickSuccessQuote(),
   ];
@@ -100,26 +132,30 @@ export async function promptSuccessScreen(
 ): Promise<void> {
   clearScreen();
   await promptFramedSelect(
-    "✅  Success!",
-    [{ name: "▶  Continue", value: "continue" }],
+    t("success_title"),
+    [{ name: t("continue"), value: "continue" }],
     " Enter to continue",
     0,
     buildSuccessContentLines(result)
   );
 }
 
-export async function promptChangeSettingsBeforeConverting(): Promise<boolean> {
+export async function promptAfterFileSelection(): Promise<AfterFileSelectionAction | null> {
   clearScreen();
   const value = await promptFramedSelect(
-    "Change settings before converting?",
+    t("menu_whatToDo"),
     [
-      { name: "No, use current settings", value: "no" },
-      { name: "Yes, open settings", value: "yes" },
+      { name: t("extract_ebook"), value: "extract" },
+      { name: t("select_formats"), value: "select_formats" },
+      { name: t("change_settings"), value: "change_settings" },
+      { name: t("view_selected"), value: "view_selected_files" },
+      { name: t("back_to_list"), value: "back" },
+      { name: t("back_to_menu"), value: "cancel" },
     ],
-    " ↑/↓ move  Enter select  Esc back",
+    t("hint_moveSelect"),
     0
   );
-  return value === "yes";
+  return value as AfterFileSelectionAction | null;
 }
 
 export async function promptOutputFilename(
@@ -127,15 +163,14 @@ export async function promptOutputFilename(
 ): Promise<string> {
   clearScreen();
   const name = await input({
-    message: frameMessage("Output file name (without extension)"),
+    message: frameMessage(t("output_filename")),
     default: defaultName,
     theme: inquirerTheme,
     validate: (value) => {
       const trimmed = value.trim();
       if (trimmed.length === 0 && !defaultName)
-        return "Please enter a non-empty name.";
-      if (/[<>:"/\\|?*]/.test(trimmed))
-        return 'Name must not contain <>:"/\\|?*';
+        return t("output_filename_error");
+      if (/[<>:"/\\|?*]/.test(trimmed)) return t("output_filename_invalid");
       return true;
     },
   });

@@ -1,0 +1,11 @@
+name: ebook-x
+version: {{VERSION}}
+arch: amd64
+maintainer: ritual
+description: EPUB to TXT/MD/HTML/JSON converter CLI
+license: MIT
+contents:
+  - src: pkg/usr/bin/ebook-x
+    dst: /usr/bin/ebook-x
+    file_info:
+      mode: 0755

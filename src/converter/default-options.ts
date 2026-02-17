@@ -14,4 +14,6 @@ export const defaultConvertOptions: ConvertOptions = {
   chapterFileNameCustomPrefix: "",
   indexTocForChapters: false,
   addBackLinkToChapters: false,
+  addNextLinkToChapters: false,
+  addPrevLinkToChapters: false,
 };
