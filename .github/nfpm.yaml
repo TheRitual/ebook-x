@@ -1,5 +1,5 @@
 name: ebook-x
-version: { { VERSION } }
+version: {{VERSION}}
 arch: amd64
 maintainer: ritual
 description: EPUB to TXT/MD/HTML/JSON converter CLI
