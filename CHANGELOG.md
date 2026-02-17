@@ -1,3 +1,9 @@
+## [1.2.3](https://github.com/TheRitual/ebook-x/compare/v1.2.2...v1.2.3) (2026-02-17)
+
+### Bug Fixes
+
+- Correct version syntax in nfpm.yaml for variable interpolation ([85011a1](https://github.com/TheRitual/ebook-x/commit/85011a1adf80b86f6c11d6e75665e26a11e14458))
+
 ## [1.2.2](https://github.com/TheRitual/ebook-x/compare/v1.2.1...v1.2.2) (2026-02-17)
 
 ### Bug Fixes
