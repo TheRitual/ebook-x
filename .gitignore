@@ -6,3 +6,4 @@ dist/
 .env.*
 instructions/
 books/
+output/*

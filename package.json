@@ -7,16 +7,20 @@
   },
   "scripts": {
     "build": "vite build --ssr",
+    "dev": "vite build --ssr --watch",
+    "run": "node dist/cli.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:example": "vitest run example-book",
     "test:watch": "vitest",
     "prepare": "husky",
     "release": "semantic-release"
   },
+  "license": "MIT",
   "engines": {
     "node": ">=20"
   },
